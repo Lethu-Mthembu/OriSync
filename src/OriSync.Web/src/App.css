@@ -1,0 +1,100 @@
+.app-shell {
+  min-height: 100vh;
+  background: #f7f9fb;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4rem;
+  padding: 0 1.25rem;
+  color: #ffffff;
+  background: #005596;
+}
+
+.brand-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #005596;
+  background: #fdb813;
+  font-weight: 700;
+}
+
+.brand-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.welcome-panel {
+  width: min(44rem, calc(100% - 2rem));
+  margin: clamp(3rem, 12vw, 8rem) auto 0;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  box-sizing: border-box;
+  border-top: 0.5rem solid #fdb813;
+  background: #ffffff;
+  box-shadow: 0 1rem 2.5rem rgb(24 54 77 / 10%);
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  color: #d7292f;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+h1 {
+  margin: 0;
+  color: #18364d;
+  font-size: clamp(2rem, 7vw, 3.5rem);
+  line-height: 1.08;
+}
+
+.description {
+  max-width: 38rem;
+  margin: 1.5rem 0 0;
+  color: #355458;
+  line-height: 1.7;
+}
+
+.connection-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-top: 2rem;
+  padding: 0.625rem 0.875rem;
+  color: #355458;
+  background: #eef3f6;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: #7b8790;
+}
+
+.connection-state--connected .status-dot {
+  background: #147d48;
+}
+
+.connection-state--unavailable .status-dot {
+  background: #d7292f;
+}
+
+@media (max-width: 30rem) {
+  .top-bar {
+    min-height: 3.5rem;
+    padding-inline: 1rem;
+  }
+
+  .welcome-panel {
+    margin-top: 1rem;
+    box-shadow: none;
+  }
+}
