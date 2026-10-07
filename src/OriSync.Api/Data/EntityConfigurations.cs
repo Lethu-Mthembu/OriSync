@@ -160,6 +160,7 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         builder.Property(x => x.Id).UseIdentityByDefaultColumn();
         builder.Property(x => x.Role).HasConversion<string>().HasColumnType("text");
         builder.Property(x => x.PasswordHash).HasColumnType("text").IsRequired();
+        builder.Property(x => x.RecoveryCodeHash).HasColumnType("text");
         builder.Property(x => x.IsActive).HasDefaultValue(true);
         builder.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
         builder.HasIndex(x => x.PersonId).IsUnique();

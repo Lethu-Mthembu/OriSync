@@ -7,6 +7,8 @@ public sealed class Account
     public AccountRole Role { get; set; }
     public long? CurrentGroupId { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
+    public string? RecoveryCodeHash { get; set; }
+    public DateTimeOffset? RecoveryCodeIssuedAt { get; set; }
     public bool MustChangePassword { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
