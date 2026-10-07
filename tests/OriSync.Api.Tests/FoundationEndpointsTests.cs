@@ -21,6 +21,17 @@ public sealed class FoundationEndpointsTests(WebApplicationFactory<Program> fact
     }
 
     [Fact]
+    public async Task ReadinessEndpointReportsUnhealthyWithoutDatabaseConfiguration()
+    {
+        var response = await _client.GetAsync("/health/ready");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<HealthResponse>();
+        Assert.NotNull(payload);
+        Assert.Equal("unhealthy", payload.Status);
+    }
+
+    [Fact]
     public async Task StatusEndpointIdentifiesTheService()
     {
         var response = await _client.GetAsync("/api/status");

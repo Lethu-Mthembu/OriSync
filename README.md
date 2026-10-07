@@ -16,7 +16,8 @@ The current foundation contains:
 - backend and frontend automated tests;
 - a multi-stage production container;
 - a Render Blueprint that deploys the `dev` branch; and
-- a health endpoint at `/health`.
+- a liveness endpoint at `/health` and a PostgreSQL readiness endpoint at
+  `/health/ready`.
 
 ## Prerequisites
 
@@ -59,7 +60,7 @@ terminates public HTTPS at its reverse proxy.
 Feature 2 defines nine PostgreSQL application tables through Entity Framework
 Core migrations. Database identifiers use lowercase snake case, foreign keys
 are indexed and row-level security is enabled without client policies. OriSync
-therefore accesses Supabase PostgreSQL only through the ASP.NET Core backend.
+therefore accesses Neon PostgreSQL only through the ASP.NET Core backend.
 
 Set the backend connection without committing it:
 
@@ -96,6 +97,10 @@ docker build --tag orisync:dev .
 
 The container reads Render's `PORT` variable and otherwise listens on port
 `10000`.
+
+`/health` checks only whether the web process is alive and remains Render's
+deployment probe. `/health/ready` performs a real PostgreSQL connection check
+and returns HTTP 503 when the connection is missing or unavailable.
 
 ## Deployment
 

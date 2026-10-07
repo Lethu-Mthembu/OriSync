@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OriSync.Api.Data;
+using OriSync.Api.Health;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,7 +16,17 @@ if (Environment.GetEnvironmentVariable("PORT") is { Length: > 0 } renderPort)
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
 
-builder.Services.AddHealthChecks();
+builder.Services
+    .AddHealthChecks()
+    .AddCheck(
+        "application",
+        () => HealthCheckResult.Healthy(),
+        tags: ["live"])
+    .AddCheck<DatabaseReadinessHealthCheck>(
+        "database",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["ready"],
+        timeout: TimeSpan.FromSeconds(10));
 
 var databaseConnection = builder.Configuration.GetConnectionString("OriSync");
 if (!string.IsNullOrWhiteSpace(databaseConnection))
@@ -45,14 +57,14 @@ app.UseStaticFiles();
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
-    ResponseWriter = async (context, report) =>
-    {
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new
-        {
-            status = report.Status.ToString().ToLowerInvariant()
-        });
-    }
+    Predicate = registration => registration.Tags.Contains("live"),
+    ResponseWriter = WriteHealthResponse
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready"),
+    ResponseWriter = WriteHealthResponse
 });
 
 app.MapGet("/api/status", (IHostEnvironment environment) => Results.Ok(new
@@ -65,5 +77,14 @@ app.MapGet("/api/status", (IHostEnvironment environment) => Results.Ok(new
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+static Task WriteHealthResponse(HttpContext context, HealthReport report)
+{
+    context.Response.ContentType = "application/json";
+    return context.Response.WriteAsJsonAsync(new
+    {
+        status = report.Status.ToString().ToLowerInvariant()
+    });
+}
 
 public partial class Program;
