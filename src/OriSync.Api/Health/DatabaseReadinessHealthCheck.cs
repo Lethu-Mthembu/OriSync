@@ -23,9 +23,14 @@ public sealed partial class DatabaseReadinessHealthCheck(
             await using var scope = scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
 
-            return await dbContext.Database.CanConnectAsync(cancellationToken)
-                ? HealthCheckResult.Healthy()
-                : HealthCheckResult.Unhealthy("Database connection failed.");
+            // CanConnectAsync intentionally converts provider exceptions into false,
+            // which prevents private logs from explaining configuration failures.
+            // Opening the connection preserves those diagnostics while the public
+            // response remains deliberately generic.
+            await dbContext.Database.OpenConnectionAsync(cancellationToken);
+            await dbContext.Database.CloseConnectionAsync();
+
+            return HealthCheckResult.Healthy();
         }
         catch (Exception exception)
         {
