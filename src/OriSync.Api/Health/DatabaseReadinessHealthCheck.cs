@@ -35,8 +35,9 @@ public sealed partial class DatabaseReadinessHealthCheck(
         catch (Exception exception)
         {
             // The public response stays generic because provider exceptions can
-            // contain infrastructure details. Full diagnostics remain in private logs.
-            LogDatabaseReadinessFailure(exception);
+            // contain credentials. Log only the exception type; never serialize the
+            // provider message or connection string, even to private service logs.
+            LogDatabaseReadinessFailure(exception.GetType().Name);
             return HealthCheckResult.Unhealthy("Database connection failed.");
         }
     }
@@ -44,6 +45,6 @@ public sealed partial class DatabaseReadinessHealthCheck(
     [LoggerMessage(
         EventId = 1001,
         Level = LogLevel.Warning,
-        Message = "Database readiness check failed.")]
-    private partial void LogDatabaseReadinessFailure(Exception exception);
+        Message = "Database readiness check failed with {ExceptionType}.")]
+    private partial void LogDatabaseReadinessFailure(string exceptionType);
 }
