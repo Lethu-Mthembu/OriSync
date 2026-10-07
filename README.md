@@ -19,6 +19,10 @@ The current foundation contains:
 - a liveness endpoint at `/health` and a PostgreSQL readiness endpoint at
   `/health/ready`.
 
+Feature 3 adds admin and mentor authentication with secure host-only cookies,
+CSRF protection, single active sessions, inactivity and absolute expiry,
+password changes, mentor-number reset and one-time admin recovery.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -112,3 +116,5 @@ implemented; secrets must never be committed to this repository.
 See [the implementation plan](docs/implementation-plan.md) for the feature
 sequence and branch policy. See [the database schema](docs/database-schema.md)
 for table responsibilities, enforced constraints and migration instructions.
+See [authentication and sessions](docs/authentication.md) for the API contract,
+session rules, accepted reset risk and one-time admin bootstrap procedure.

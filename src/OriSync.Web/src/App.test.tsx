@@ -1,33 +1,82 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
-describe('App', () => {
+const signedInSession = {
+  accountId: 1,
+  firstName: 'Jane',
+  surname: 'Mentor',
+  role: 'Mentor',
+  groupId: null,
+  mustChangePassword: false,
+  absoluteExpiresAt: '2026-10-08T08:00:00Z',
+}
+
+describe('App authentication', () => {
   afterEach(() => {
+    cleanup()
     vi.unstubAllGlobals()
   })
 
-  it('shows the application name and reports a connected API', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ service: 'OriSync.Api', status: 'ready' }),
+  it('shows the shared sign-in page when no session exists', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(null, 401)))
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mentor forgot password' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Admin recovery' })).toBeInTheDocument()
+  })
+
+  it('restores an authenticated session', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(signedInSession)))
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Welcome, Jane' })).toBeInTheDocument()
+    expect(screen.getByText('No group is assigned. Contact the administrator.')).toBeInTheDocument()
+  })
+
+  it('signs in with a CSRF-protected request', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(null, 401))
+      .mockResolvedValueOnce(response({ requestToken: 'csrf-token' }))
+      .mockResolvedValueOnce(response(signedInSession))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    render(<App />)
+    await user.type(await screen.findByLabelText('Email'), 'mentor@orisync.test')
+    await user.type(screen.getByLabelText('Password'), 'password')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('heading', { name: 'Welcome, Jane' })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-CSRF-TOKEN': 'csrf-token' }),
       }),
     )
-
-    render(<App />)
-
-    expect(screen.getByText('OriSync')).toBeInTheDocument()
-    expect(await screen.findByText('API connected')).toBeInTheDocument()
   })
 
-  it('reports an unavailable API when the request fails', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  it('opens the mentor-number reset form', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(null, 401)))
+    const user = userEvent.setup()
 
     render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Mentor forgot password' }))
 
-    expect(await screen.findByText('API unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Reset password' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Mentor number')).toBeInTheDocument()
   })
 })
+
+function response(body: unknown, status = 200) {
+  return new Response(body === null ? null : JSON.stringify(body), {
+    status,
+    headers: body === null ? undefined : { 'Content-Type': 'application/json' },
+  })
+}

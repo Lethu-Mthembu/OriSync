@@ -1,7 +1,11 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OriSync.Api.Authentication;
 using OriSync.Api.Data;
+using OriSync.Api.Domain;
 using OriSync.Api.Health;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,20 +32,69 @@ builder.Services
         tags: ["ready"],
         timeout: TimeSpan.FromSeconds(10));
 
-var databaseConnection = builder.Configuration.GetConnectionString("OriSync");
-if (!string.IsNullOrWhiteSpace(databaseConnection))
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
+builder.Services.AddScoped<OriSync.Api.Authentication.AuthenticationService>();
+builder.Services.AddAuthentication(AuthenticationConstants.Scheme)
+    .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
+        AuthenticationConstants.Scheme,
+        _ => { });
+builder.Services.AddAuthorization();
+builder.Services.AddAntiforgery(options =>
 {
-    builder.Services.AddDbContext<OriSyncDbContext>(options =>
-        options.UseNpgsql(databaseConnection).UseSnakeCaseNamingConvention());
-}
+    options.Cookie.Name = AuthenticationConstants.AntiforgeryCookieName;
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.Path = "/";
+    options.HeaderName = AuthenticationConstants.AntiforgeryHeaderName;
+});
+
+var databaseConnection = builder.Configuration.GetConnectionString("OriSync");
+builder.Services.AddDbContext<OriSyncDbContext>(options =>
+{
+    if (string.IsNullOrWhiteSpace(databaseConnection))
+    {
+        options.UseNpgsql();
+    }
+    else
+    {
+        options.UseNpgsql(databaseConnection);
+    }
+
+    options.UseSnakeCaseNamingConvention();
+});
 
 var app = builder.Build();
+
+if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
+{
+    Environment.ExitCode = await AdminBootstrapCommand.RunAsync(
+        app.Services,
+        app.Configuration,
+        Console.Out);
+    return;
+}
+
+if (args.Contains("--rotate-admin-recovery", StringComparer.Ordinal))
+{
+    Environment.ExitCode = await AdminBootstrapCommand.RotateRecoveryCodeAsync(
+        app.Services,
+        app.Configuration,
+        Console.Out);
+    return;
+}
 
 app.Use(async (context, next) =>
 {
     context.Response.Headers.XContentTypeOptions = "nosniff";
     context.Response.Headers.XFrameOptions = "DENY";
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    if (context.Request.Path.StartsWithSegments("/api/auth"))
+    {
+        context.Response.Headers.CacheControl = "no-store";
+    }
+
     await next();
 });
 
@@ -51,6 +104,11 @@ if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+app.UseAuthentication();
+app.UseMiddleware<PasswordChangeRequiredMiddleware>();
+app.UseAuthorization();
+app.UseAntiforgery();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -73,6 +131,8 @@ app.MapGet("/api/status", (IHostEnvironment environment) => Results.Ok(new
     status = "ready",
     environment = environment.EnvironmentName
 }));
+
+app.MapAuthenticationEndpoints();
 
 app.MapFallbackToFile("index.html");
 
