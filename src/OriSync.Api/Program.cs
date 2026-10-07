@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.EntityFrameworkCore;
+using OriSync.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +16,13 @@ if (Environment.GetEnvironmentVariable("PORT") is { Length: > 0 } renderPort)
 
 builder.Services.AddHealthChecks();
 
+var databaseConnection = builder.Configuration.GetConnectionString("OriSync");
+if (!string.IsNullOrWhiteSpace(databaseConnection))
+{
+    builder.Services.AddDbContext<OriSyncDbContext>(options =>
+        options.UseNpgsql(databaseConnection).UseSnakeCaseNamingConvention());
+}
+
 var app = builder.Build();
 
 app.Use(async (context, next) =>
@@ -23,6 +32,13 @@ app.Use(async (context, next) =>
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
     await next();
 });
+
+// Render terminates HTTPS at its reverse proxy and forwards HTTP to the container.
+// Local development owns its TLS listener, so redirect only in Development.
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

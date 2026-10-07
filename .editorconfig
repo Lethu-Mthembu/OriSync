@@ -15,3 +15,9 @@ dotnet_sort_system_directives_first = true
 
 [*.md]
 trim_trailing_whitespace = false
+
+[src/**/Data/Migrations/*.cs]
+# EF Core generates short-lived array arguments in migration operation calls.
+# Editing generated migrations to satisfy CA1861 makes future diffs unstable.
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.IDE0161.severity = none
