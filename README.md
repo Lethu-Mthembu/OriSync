@@ -32,7 +32,7 @@ Node.js 25 is unsupported and must not be used for project builds.
 Start the API:
 
 ```powershell
-dotnet run --project src/OriSync.Api
+dotnet run --project src/OriSync.Api --launch-profile https
 ```
 
 Start the React development server in a second terminal:
@@ -43,7 +43,36 @@ npm install
 npm run dev
 ```
 
-Vite proxies `/api` and `/health` to the API at `http://localhost:5211`.
+The HTTPS launch profile listens on `https://localhost:7211` and also exposes
+`http://localhost:5211` for redirect verification. Vite proxies `/api` and
+`/health` to the HTTPS endpoint. Check the local development certificate with:
+
+```powershell
+dotnet dev-certs https --check --trust
+```
+
+The production container continues to use HTTP internally because Render
+terminates public HTTPS at its reverse proxy.
+
+## Database schema
+
+Feature 2 defines nine PostgreSQL application tables through Entity Framework
+Core migrations. Database identifiers use lowercase snake case, foreign keys
+are indexed and row-level security is enabled without client policies. OriSync
+therefore accesses Supabase PostgreSQL only through the ASP.NET Core backend.
+
+Set the backend connection without committing it:
+
+```powershell
+$env:ConnectionStrings__OriSync = '<postgresql-connection-string>'
+```
+
+Create or update a local database with:
+
+```powershell
+dotnet tool restore
+dotnet ef database update --project src/OriSync.Api --startup-project src/OriSync.Api
+```
 
 ## Verification
 
@@ -76,4 +105,5 @@ the release. Runtime secrets will be added only when the relevant features are
 implemented; secrets must never be committed to this repository.
 
 See [the implementation plan](docs/implementation-plan.md) for the feature
-sequence and branch policy.
+sequence and branch policy. See [the database schema](docs/database-schema.md)
+for table responsibilities, enforced constraints and migration instructions.
