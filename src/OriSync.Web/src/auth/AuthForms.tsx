@@ -141,7 +141,7 @@ export function MentorResetForm({ onView }: { onView: (view: AuthView) => void }
       <Field label="Login email" type="email" value={email} onChange={setEmail} autoComplete="username" />
       {codeRequested && (
         <>
-          <Field label="Reset code" value={code} onChange={setCode} inputMode="numeric" autoComplete="one-time-code" />
+          <Field label="Reset code" value={code} onChange={setCode} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maximumLength={6} />
           <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} />
           <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} />
         </>
@@ -288,6 +288,7 @@ function Field({
   onChange,
   type = 'text',
   minimumLength,
+  maximumLength,
   ...inputProps
 }: {
   label: string
@@ -295,6 +296,7 @@ function Field({
   onChange: (value: string) => void
   type?: string
   minimumLength?: number
+  maximumLength?: number
   autoComplete?: string
   inputMode?: 'numeric' | 'text'
   pattern?: string
@@ -308,6 +310,7 @@ function Field({
         type={type}
         value={value}
         minLength={minimumLength}
+        maxLength={maximumLength}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>

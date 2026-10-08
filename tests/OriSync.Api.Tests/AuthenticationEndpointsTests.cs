@@ -35,6 +35,10 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         {
             builder.UseSetting("ConnectionStrings:OriSync", _postgres.GetConnectionString());
             builder.UseSetting("PasswordReset:CodeLength", "6");
+            builder.UseSetting(
+                "PasswordReset:CodeSecret",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
+            builder.UseSetting("PasswordReset:DispatcherEnabled", "false");
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IPasswordResetEmailSender>(_emailSender));
         });
@@ -50,6 +54,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         await SeedMentorAsync(dbContext, "223450006", "otp-expiry@orisync.test");
         await SeedMentorAsync(dbContext, "223450007", "attempts@orisync.test");
         await SeedMentorAsync(dbContext, "223450008", "hourly-limit@orisync.test");
+        await SeedMentorAsync(dbContext, "223450009", "outbox@orisync.test");
         await SeedAdminAsync(dbContext);
     }
 
@@ -158,6 +163,8 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         requestCode.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
         var requested = await resetClient.SendAsync(requestCode);
         Assert.Equal(HttpStatusCode.Accepted, requested.StatusCode);
+        Assert.Equal(0, _emailSender.SendCount);
+        await DispatchPasswordResetEmailAsync();
         Assert.Equal("reset@orisync.test", _emailSender.LastRecipient);
         Assert.Matches("^[0-9]{6}$", _emailSender.LastCode);
 
@@ -184,6 +191,62 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         Assert.Equal(
             HttpStatusCode.OK,
             (await LoginAsync(resetClient, "reset@orisync.test", "replacement-password")).StatusCode);
+    }
+
+    [Fact]
+    public async Task PasswordResetOutboxRetriesSameCodeAndStartsExpiryAfterDelivery()
+    {
+        _emailSender.FailuresRemaining = 1;
+        using var client = CreateClient();
+        var csrf = await GetCsrfAsync(client);
+
+        var response = await RequestPasswordResetAsync(
+            client,
+            csrf,
+            "223450009",
+            "outbox@orisync.test");
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(0, _emailSender.SendCount);
+        await DispatchPasswordResetEmailAsync();
+        Assert.Equal(1, _emailSender.SendCount);
+
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+            var queued = await dbContext.PasswordResetEmailOutbox
+                .Include(item => item.PasswordResetOtp)
+                .SingleAsync(item =>
+                    item.PasswordResetOtp.Account.Person.InstitutionNumber == "223450009");
+            Assert.Equal(1, queued.AttemptCount);
+            Assert.Null(queued.SentAt);
+            Assert.Null(queued.PasswordResetOtp.SentAt);
+            Assert.Null(queued.PasswordResetOtp.ExpiresAt);
+            Assert.NotNull(queued.PasswordResetOtp.CodeNonce);
+            queued.AvailableAt = DateTimeOffset.UtcNow;
+            await dbContext.SaveChangesAsync();
+        }
+
+        await DispatchPasswordResetEmailAsync();
+
+        Assert.Equal(2, _emailSender.SendCount);
+        Assert.Equal(2, _emailSender.SentCodes.Count);
+        Assert.Equal(_emailSender.SentCodes[0], _emailSender.SentCodes[1]);
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+            var delivered = await dbContext.PasswordResetEmailOutbox
+                .Include(item => item.PasswordResetOtp)
+                .SingleAsync(item =>
+                    item.PasswordResetOtp.Account.Person.InstitutionNumber == "223450009");
+            Assert.NotNull(delivered.SentAt);
+            Assert.Null(delivered.DiscardedAt);
+            Assert.Null(delivered.PasswordResetOtp.CodeNonce);
+            Assert.Equal(delivered.SentAt, delivered.PasswordResetOtp.SentAt);
+            Assert.Equal(
+                PasswordResetConstants.OtpLifetime,
+                delivered.PasswordResetOtp.ExpiresAt - delivered.PasswordResetOtp.SentAt);
+        }
     }
 
     [Fact]
@@ -226,6 +289,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, second.StatusCode);
+        await DispatchPasswordResetEmailAsync();
         Assert.Equal(1, _emailSender.SendCount);
     }
 
@@ -281,6 +345,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             csrf,
             "223450006",
             "otp-expiry@orisync.test");
+        await DispatchPasswordResetEmailAsync();
 
         await using (var scope = _factory!.Services.CreateAsyncScope())
         {
@@ -317,6 +382,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             csrf,
             "223450007",
             "attempts@orisync.test");
+        await DispatchPasswordResetEmailAsync();
         var validCode = _emailSender.LastCode!;
         var invalidCode = validCode == "000000" ? "111111" : "000000";
 
@@ -498,6 +564,14 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         return await client.SendAsync(request);
     }
 
+    private async Task DispatchPasswordResetEmailAsync()
+    {
+        await using var scope = _factory!.Services.CreateAsyncScope();
+        var processor = scope.ServiceProvider
+            .GetRequiredService<PasswordResetEmailOutboxProcessor>();
+        Assert.True(await processor.ProcessOneAsync(CancellationToken.None));
+    }
+
     private static async Task SeedMentorAsync(
         OriSyncDbContext dbContext,
         string mentorNumber,
@@ -573,6 +647,8 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         public string? LastRecipient { get; private set; }
         public string? LastCode { get; private set; }
         public int SendCount { get; private set; }
+        public int FailuresRemaining { get; set; }
+        public List<string> SentCodes { get; } = [];
 
         public Task<bool> SendAsync(
             string recipient,
@@ -584,7 +660,14 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             LastRecipient = recipient;
             LastCode = code;
             SendCount++;
-            return Task.FromResult(true);
+            SentCodes.Add(code);
+            if (FailuresRemaining <= 0)
+            {
+                return Task.FromResult(true);
+            }
+
+            FailuresRemaining--;
+            return Task.FromResult(false);
         }
     }
 }

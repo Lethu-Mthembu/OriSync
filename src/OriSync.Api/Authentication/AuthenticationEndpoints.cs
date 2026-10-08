@@ -167,8 +167,10 @@ public static partial class AuthenticationEndpoints
     private static async Task<IResult> RequestMentorPasswordResetAsync(
         RequestMentorPasswordResetRequest request,
         AuthenticationService authenticationService,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
+        var startedAt = timeProvider.GetTimestamp();
         // The same response is returned for malformed, unknown, rate-limited and
         // delivery-failed requests so this endpoint cannot enumerate accounts.
         if (MentorNumberPattern().IsMatch(request.MentorNumber) && IsEmail(request.Email))
@@ -177,6 +179,13 @@ public static partial class AuthenticationEndpoints
                 request.MentorNumber,
                 request.Email,
                 cancellationToken);
+        }
+
+        var remainingDelay = PasswordResetConstants.MinimumRequestDuration -
+            timeProvider.GetElapsedTime(startedAt);
+        if (remainingDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(remainingDelay, timeProvider, cancellationToken);
         }
 
         return Results.Accepted(value: new PasswordResetRequestResponse(

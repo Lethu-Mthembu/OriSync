@@ -15,6 +15,7 @@ public sealed class DatabaseSchemaTests : IAsyncLifetime
         "data_protection_keys",
         "groups",
         "orientations",
+        "password_reset_email_outbox",
         "password_reset_otps",
         "people",
         "person_emails",

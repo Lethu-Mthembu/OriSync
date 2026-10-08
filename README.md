@@ -61,11 +61,12 @@ terminates public HTTPS at its reverse proxy.
 
 ## Database schema
 
-The current schema contains eleven PostgreSQL tables through Entity Framework
-Core migrations: nine domain tables, a password-reset OTP table and the shared
-ASP.NET Core Data Protection key ring. Database identifiers use lowercase snake
-case, foreign keys are indexed and row-level security is enabled without client
-policies. OriSync accesses Neon PostgreSQL only through the ASP.NET Core backend.
+The current schema contains twelve PostgreSQL tables through Entity Framework
+Core migrations: nine domain tables, password-reset OTP and email-outbox tables,
+and the shared ASP.NET Core Data Protection key ring. Database identifiers use
+lowercase snake case, foreign keys are indexed and row-level security is enabled
+without client policies. OriSync accesses Neon PostgreSQL only through the
+ASP.NET Core backend.
 
 Set the backend connection without committing it:
 

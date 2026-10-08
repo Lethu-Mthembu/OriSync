@@ -1,6 +1,6 @@
 # Database schema
 
-OriSync uses eleven PostgreSQL tables. Entity Framework Core owns the migration
+OriSync uses twelve PostgreSQL tables. Entity Framework Core owns the migration
 history; generated register PDFs are never stored in the database.
 
 | Table | Responsibility |
@@ -14,6 +14,7 @@ history; generated register PDFs are never stored in the database.
 | `attendance_records` | One attendance row per enrolled student and date, with a historical group snapshot |
 | `sessions` | Hashed server sessions, activity and revocation state |
 | `password_reset_otps` | Hashed mentor recovery codes, delivery state, expiry and failed attempts |
+| `password_reset_email_outbox` | Durable, retryable Resend work without plaintext OTP storage |
 | `audit_events` | Short-lived records for sensitive changes, expiring after the configured 14-day period |
 | `data_protection_keys` | Shared ASP.NET Core key ring for antiforgery and protected server payloads |
 

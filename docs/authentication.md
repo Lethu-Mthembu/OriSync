@@ -60,25 +60,32 @@ Every POST requires `X-CSRF-TOKEN`, including anonymous POSTs.
 
 Mentor recovery requires the exact nine-digit mentor number and login email.
 The request endpoint always returns the same accepted response for malformed,
-unknown, rate-limited and delivery-failed requests. A numeric code is sent only
-to the matching login email through Resend. Codes expire after five minutes,
-allow five failed verification attempts, have a 60-second resend cooldown and
-are limited to five successfully sent codes per account per hour. Requesting a
-new code consumes older unconsumed codes. A successful recovery replaces the
+unknown, rate-limited and delivery-failed requests and takes at least 500 ms to
+reduce account-enumeration timing differences. A numeric code is queued only for
+the matching login email. Codes allow five failed verification attempts, have a
+60-second request cooldown and are limited to five requests per account per
+hour.
+
+The request transaction stores the salted code hash, a non-secret nonce and a
+durable email-outbox row; it never stores the numeric code. A background worker
+derives the same code from the nonce and a server secret, then sends through
+Resend with an idempotency key. Failed deliveries retry with capped exponential
+backoff for up to five minutes. After Resend accepts the message, the nonce is
+removed and the code receives its full five-minute lifetime. Delivering a new
+code consumes older unconsumed codes. A successful recovery replaces the
 password, consumes every outstanding code and revokes every active session.
 
 Production requires these server-side settings:
 
 ```text
-PasswordReset__CodeLength=<confirmed code length from 4 through 9>
+PasswordReset__CodeSecret=<Base64 encoding of at least 32 random bytes>
 Resend__ApiKey=<Resend API key>
-Resend__FromAddress=OriSync <password-reset@verified-domain>
 ```
 
-The API key must remain a Render secret. The sender address must use the Resend
-domain that will be verified later. Until both Resend settings and the code
-length exist, the public endpoint deliberately returns its generic response but
-does not create a usable reset code.
+OriSync uses six-digit reset codes. The API key must remain a Render secret. The
+confirmed sender is `OriSync-No-reply@trainmate.nemasites.com` and is committed
+as non-secret configuration. Until both secrets exist, the Staging/Production
+application refuses to start instead of exposing a reset flow that cannot send.
 
 ## One-time admin bootstrap
 
@@ -117,8 +124,9 @@ once.
 `AddAuthenticationRecovery` adds the optional admin recovery-code hash and its
 issue time to `accounts`. `PersistDataProtectionKeys` adds the shared Data
 Protection key ring. `AddMentorPasswordResetOtps` adds the hashed, expiring OTP
-records. Apply migrations before enabling the authentication UI against an
-existing database:
+records. `AddPasswordResetEmailOutbox` adds durable delivery and changes OTP
+expiry to start after successful delivery. Apply migrations before enabling the
+authentication UI against an existing database:
 
 ```powershell
 dotnet ef database update --project src/OriSync.Api --startup-project src/OriSync.Api

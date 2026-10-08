@@ -1,6 +1,4 @@
 using System.Data;
-using System.Globalization;
-using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -14,7 +12,7 @@ public sealed partial class AuthenticationService(
     IPasswordHasher<Account> passwordHasher,
     IPasswordHasher<PasswordResetOtp> otpHasher,
     TimeProvider timeProvider,
-    IPasswordResetEmailSender passwordResetEmailSender,
+    IPasswordResetCodeGenerator passwordResetCodeGenerator,
     IOptions<PasswordResetOptions> passwordResetOptions,
     ILogger<AuthenticationService> logger)
 {
@@ -154,21 +152,21 @@ public sealed partial class AuthenticationService(
         }
 
         var now = timeProvider.GetUtcNow();
-        var sentRequests = dbContext.PasswordResetOtps
-            .Where(otp => otp.AccountId == account.Id && otp.SentAt != null);
-        var latestSentAt = await sentRequests
-            .MaxAsync(otp => (DateTimeOffset?)otp.SentAt, cancellationToken);
-        if (latestSentAt > now - PasswordResetConstants.ResendCooldown ||
-            await sentRequests.CountAsync(
-                otp => otp.SentAt >= now - PasswordResetConstants.RequestWindow,
+        var resetRequests = dbContext.PasswordResetOtps
+            .Where(otp => otp.AccountId == account.Id);
+        var latestRequestedAt = await resetRequests
+            .MaxAsync(otp => (DateTimeOffset?)otp.RequestedAt, cancellationToken);
+        if (latestRequestedAt > now - PasswordResetConstants.ResendCooldown ||
+            await resetRequests.CountAsync(
+                otp => otp.RequestedAt >= now - PasswordResetConstants.RequestWindow,
                 cancellationToken) >= PasswordResetConstants.MaximumRequestsPerWindow)
         {
             return;
         }
 
-        if (!TryGenerateOtp(passwordResetOptions.Value.CodeLength, out var code))
+        if (!passwordResetCodeGenerator.TryCreate(out var nonce, out var code))
         {
-            LogInvalidCodeLength(logger);
+            LogInvalidCodeConfiguration(logger);
             return;
         }
 
@@ -181,34 +179,20 @@ public sealed partial class AuthenticationService(
         var otp = new PasswordResetOtp
         {
             AccountId = account.Id,
-            RequestedAt = now,
-            ExpiresAt = now + PasswordResetConstants.OtpLifetime
+            CodeNonce = nonce,
+            RequestedAt = now
         };
         otp.CodeHash = otpHasher.HashPassword(otp, code);
-        dbContext.PasswordResetOtps.Add(otp);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        var sent = await passwordResetEmailSender.SendAsync(
-            recipient.Email,
-            recipient.FirstName,
-            code,
-            $"mentor-password-reset/{otp.Id}",
-            cancellationToken);
-        if (!sent)
+        var outbox = new PasswordResetEmailOutbox
         {
-            await transaction.RollbackAsync(cancellationToken);
-            return;
-        }
-
-        await dbContext.PasswordResetOtps
-            .Where(item =>
-                item.AccountId == account.Id &&
-                item.Id != otp.Id &&
-                item.ConsumedAt == null)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(item => item.ConsumedAt, now),
-                cancellationToken);
-        otp.SentAt = now;
+            PasswordResetOtp = otp,
+            RecipientEmail = recipient.Email,
+            RecipientFirstName = recipient.FirstName,
+            CreatedAt = now,
+            AvailableAt = now,
+            DiscardAfter = now + PasswordResetConstants.DeliveryWindow
+        };
+        dbContext.PasswordResetEmailOutbox.Add(outbox);
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
@@ -266,7 +250,8 @@ public sealed partial class AuthenticationService(
             return false;
         }
 
-        if (otp.ExpiresAt <= now ||
+        if (otp.ExpiresAt is null ||
+            otp.ExpiresAt <= now ||
             otp.FailedAttempts >= PasswordResetConstants.MaximumVerificationAttempts)
         {
             otp.ConsumedAt = now;
@@ -425,20 +410,8 @@ public sealed partial class AuthenticationService(
                     .SetProperty(session => session.RevocationReason, reason),
                 cancellationToken);
 
-    private static bool TryGenerateOtp(int length, out string code)
-    {
-        code = string.Empty;
-        if (length is < 4 or > 9)
-        {
-            return false;
-        }
-
-        var upperBound = (int)Math.Pow(10, length);
-        code = RandomNumberGenerator.GetInt32(upperBound)
-            .ToString($"D{length}", CultureInfo.InvariantCulture);
-        return true;
-    }
-
-    [LoggerMessage(LogLevel.Error, "PasswordReset:CodeLength must be configured between 4 and 9.")]
-    private static partial void LogInvalidCodeLength(ILogger logger);
+    [LoggerMessage(
+        LogLevel.Error,
+        "Password reset code generation is not configured with a valid length and secret.")]
+    private static partial void LogInvalidCodeConfiguration(ILogger logger);
 }

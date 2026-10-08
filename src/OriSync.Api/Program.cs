@@ -38,10 +38,28 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IPasswordHasher<PasswordResetOtp>, PasswordHasher<PasswordResetOtp>>();
 builder.Services.AddScoped<OriSync.Api.Authentication.AuthenticationService>();
-builder.Services.Configure<PasswordResetOptions>(
-    builder.Configuration.GetSection(PasswordResetOptions.SectionName));
-builder.Services.Configure<ResendOptions>(
-    builder.Configuration.GetSection(ResendOptions.SectionName));
+builder.Services.AddSingleton<IPasswordResetCodeGenerator, PasswordResetCodeGenerator>();
+builder.Services.AddScoped<PasswordResetEmailOutboxProcessor>();
+builder.Services.AddHostedService<PasswordResetEmailOutboxWorker>();
+var passwordResetOptions = builder.Services.AddOptions<PasswordResetOptions>()
+    .Bind(builder.Configuration.GetSection(PasswordResetOptions.SectionName));
+var resendOptions = builder.Services.AddOptions<ResendOptions>()
+    .Bind(builder.Configuration.GetSection(ResendOptions.SectionName));
+if (!builder.Environment.IsDevelopment())
+{
+    passwordResetOptions
+        .Validate(options => options.CodeLength == 6, "PasswordReset:CodeLength must be 6.")
+        .Validate(
+            options => PasswordResetCodeGenerator.HasValidSecret(options.CodeSecret),
+            "PasswordReset:CodeSecret must be a Base64 value containing at least 32 bytes.")
+        .ValidateOnStart();
+    resendOptions
+        .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "Resend:ApiKey is required.")
+        .Validate(
+            options => options.FromAddress == "OriSync-No-reply@trainmate.nemasites.com",
+            "Resend:FromAddress must match the confirmed sender.")
+        .ValidateOnStart();
+}
 builder.Services.AddHttpClient<IPasswordResetEmailSender, ResendPasswordResetEmailSender>(client =>
 {
     client.BaseAddress = new Uri("https://api.resend.com/");
