@@ -28,7 +28,14 @@ public sealed partial class DatabaseReadinessHealthCheck(
             // Opening the connection preserves those diagnostics while the public
             // response remains deliberately generic.
             await dbContext.Database.OpenConnectionAsync(cancellationToken);
-            await dbContext.Database.CloseConnectionAsync();
+
+            var pendingMigrations = await dbContext.Database
+                .GetPendingMigrationsAsync(cancellationToken);
+            if (pendingMigrations.Any())
+            {
+                LogPendingDatabaseMigrations();
+                return HealthCheckResult.Unhealthy("Database schema is not current.");
+            }
 
             return HealthCheckResult.Healthy();
         }
@@ -47,4 +54,10 @@ public sealed partial class DatabaseReadinessHealthCheck(
         Level = LogLevel.Warning,
         Message = "Database readiness check failed with {ExceptionType}.")]
     private partial void LogDatabaseReadinessFailure(string exceptionType);
+
+    [LoggerMessage(
+        EventId = 1002,
+        Level = LogLevel.Warning,
+        Message = "Database readiness check found pending migrations.")]
+    private partial void LogPendingDatabaseMigrations();
 }
