@@ -1,15 +1,22 @@
 using System.Data;
+using System.Globalization;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using OriSync.Api.Data;
 using OriSync.Api.Domain;
 
 namespace OriSync.Api.Authentication;
 
-public sealed class AuthenticationService(
+public sealed partial class AuthenticationService(
     OriSyncDbContext dbContext,
     IPasswordHasher<Account> passwordHasher,
-    TimeProvider timeProvider)
+    IPasswordHasher<PasswordResetOtp> otpHasher,
+    TimeProvider timeProvider,
+    IPasswordResetEmailSender passwordResetEmailSender,
+    IOptions<PasswordResetOptions> passwordResetOptions,
+    ILogger<AuthenticationService> logger)
 {
     public async Task<LoginResult?> LoginAsync(
         string email,
@@ -116,18 +123,122 @@ public sealed class AuthenticationService(
         return true;
     }
 
-    public async Task<bool> ResetMentorPasswordAsync(
+    public async Task RequestMentorPasswordResetAsync(
         string mentorNumber,
-        string newPassword,
+        string email,
         CancellationToken cancellationToken)
     {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
         var accountId = await dbContext.Accounts
             .Where(account =>
                 account.Role == AccountRole.Mentor &&
-                account.Person.InstitutionNumber == mentorNumber)
+                account.Person.InstitutionNumber == mentorNumber &&
+                account.Person.Emails.Any(personEmail =>
+                    personEmail.EmailType == EmailType.Login &&
+                    personEmail.NormalizedEmail == normalizedEmail))
             .Select(account => (long?)account.Id)
             .SingleOrDefaultAsync(cancellationToken);
 
+        if (accountId is null)
+        {
+            return;
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.ReadCommitted,
+            cancellationToken);
+        var account = await LockAccountAsync(accountId.Value, cancellationToken);
+        if (account is null || !account.IsActive || account.Role != AccountRole.Mentor)
+        {
+            return;
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var sentRequests = dbContext.PasswordResetOtps
+            .Where(otp => otp.AccountId == account.Id && otp.SentAt != null);
+        var latestSentAt = await sentRequests
+            .MaxAsync(otp => (DateTimeOffset?)otp.SentAt, cancellationToken);
+        if (latestSentAt > now - PasswordResetConstants.ResendCooldown ||
+            await sentRequests.CountAsync(
+                otp => otp.SentAt >= now - PasswordResetConstants.RequestWindow,
+                cancellationToken) >= PasswordResetConstants.MaximumRequestsPerWindow)
+        {
+            return;
+        }
+
+        if (!TryGenerateOtp(passwordResetOptions.Value.CodeLength, out var code))
+        {
+            LogInvalidCodeLength(logger);
+            return;
+        }
+
+        var recipient = await dbContext.PersonEmails
+            .Where(personEmail =>
+                personEmail.PersonId == account.PersonId &&
+                personEmail.EmailType == EmailType.Login)
+            .Select(personEmail => new { personEmail.Email, personEmail.Person.FirstName })
+            .SingleAsync(cancellationToken);
+        var otp = new PasswordResetOtp
+        {
+            AccountId = account.Id,
+            RequestedAt = now,
+            ExpiresAt = now + PasswordResetConstants.OtpLifetime
+        };
+        otp.CodeHash = otpHasher.HashPassword(otp, code);
+        dbContext.PasswordResetOtps.Add(otp);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var sent = await passwordResetEmailSender.SendAsync(
+            recipient.Email,
+            recipient.FirstName,
+            code,
+            $"mentor-password-reset/{otp.Id}",
+            cancellationToken);
+        if (!sent)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        await dbContext.PasswordResetOtps
+            .Where(item =>
+                item.AccountId == account.Id &&
+                item.Id != otp.Id &&
+                item.ConsumedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(item => item.ConsumedAt, now),
+                cancellationToken);
+        otp.SentAt = now;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<bool> CompleteMentorPasswordResetAsync(
+        string mentorNumber,
+        string email,
+        string code,
+        string newPassword,
+        CancellationToken cancellationToken)
+    {
+        var trimmedCode = code.Trim();
+        var configuredLength = passwordResetOptions.Value.CodeLength;
+        if (configuredLength is < 4 or > 9 ||
+            trimmedCode.Length != configuredLength ||
+            trimmedCode.Any(character => !char.IsAsciiDigit(character)))
+        {
+            return false;
+        }
+
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var accountId = await dbContext.Accounts
+            .Where(account =>
+                account.Role == AccountRole.Mentor &&
+                account.Person.InstitutionNumber == mentorNumber &&
+                account.Person.Emails.Any(personEmail =>
+                    personEmail.EmailType == EmailType.Login &&
+                    personEmail.NormalizedEmail == normalizedEmail))
+            .Select(account => (long?)account.Id)
+            .SingleOrDefaultAsync(cancellationToken);
         if (accountId is null)
         {
             return false;
@@ -143,10 +254,50 @@ public sealed class AuthenticationService(
         }
 
         var now = timeProvider.GetUtcNow();
+        var otp = await dbContext.PasswordResetOtps
+            .Where(item =>
+                item.AccountId == account.Id &&
+                item.SentAt != null &&
+                item.ConsumedAt == null)
+            .OrderByDescending(item => item.SentAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (otp is null)
+        {
+            return false;
+        }
+
+        if (otp.ExpiresAt <= now ||
+            otp.FailedAttempts >= PasswordResetConstants.MaximumVerificationAttempts)
+        {
+            otp.ConsumedAt = now;
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return false;
+        }
+
+        if (otpHasher.VerifyHashedPassword(otp, otp.CodeHash, trimmedCode) ==
+            PasswordVerificationResult.Failed)
+        {
+            otp.FailedAttempts++;
+            if (otp.FailedAttempts >= PasswordResetConstants.MaximumVerificationAttempts)
+            {
+                otp.ConsumedAt = now;
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return false;
+        }
+
         account.PasswordHash = passwordHasher.HashPassword(account, newPassword);
         account.PasswordChangedAt = now;
         account.MustChangePassword = false;
-        await RevokeSessionsAsync(account.Id, now, "Password reset.", cancellationToken);
+        await RevokeSessionsAsync(account.Id, now, "Password reset by email OTP.", cancellationToken);
+        await dbContext.PasswordResetOtps
+            .Where(item => item.AccountId == account.Id && item.ConsumedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(item => item.ConsumedAt, now),
+                cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
@@ -273,4 +424,21 @@ public sealed class AuthenticationService(
                     .SetProperty(session => session.RevokedAt, revokedAt)
                     .SetProperty(session => session.RevocationReason, reason),
                 cancellationToken);
+
+    private static bool TryGenerateOtp(int length, out string code)
+    {
+        code = string.Empty;
+        if (length is < 4 or > 9)
+        {
+            return false;
+        }
+
+        var upperBound = (int)Math.Pow(10, length);
+        code = RandomNumberGenerator.GetInt32(upperBound)
+            .ToString($"D{length}", CultureInfo.InvariantCulture);
+        return true;
+    }
+
+    [LoggerMessage(LogLevel.Error, "PasswordReset:CodeLength must be configured between 4 and 9.")]
+    private static partial void LogInvalidCodeLength(ILogger logger);
 }

@@ -50,19 +50,35 @@ hop only; forwarded client IP addresses are ignored.
 | POST | `/api/auth/activity` | Required | Record real user interaction |
 | POST | `/api/auth/logout` | Required | Revoke the current session |
 | POST | `/api/auth/change-password` | Required | Change password and revoke all sessions |
-| POST | `/api/auth/reset-mentor-password` | Anonymous | Reset a mentor using the mentor number |
+| POST | `/api/auth/mentor-password-reset/request` | Anonymous | Request a mentor reset code using mentor number and login email |
+| POST | `/api/auth/mentor-password-reset/complete` | Anonymous | Verify the code and replace the mentor password |
 | POST | `/api/auth/recover-admin` | Anonymous | Recover the sole admin using a one-time code |
 
 Every POST requires `X-CSRF-TOKEN`, including anonymous POSTs.
 
-## Accepted security exception
+## Mentor password recovery
 
-Mentor password reset deliberately requires only a nine-digit mentor number and
-a new password. It has no email verification, MFA, lockout or rate limit. Anyone
-who learns a mentor number can take over that account. Hiding mentor numbers from
-mentor-facing responses reduces exposure but does not make this reset secure.
-This is an explicitly accepted product risk, not a recommended authentication
-design.
+Mentor recovery requires the exact nine-digit mentor number and login email.
+The request endpoint always returns the same accepted response for malformed,
+unknown, rate-limited and delivery-failed requests. A numeric code is sent only
+to the matching login email through Resend. Codes expire after five minutes,
+allow five failed verification attempts, have a 60-second resend cooldown and
+are limited to five successfully sent codes per account per hour. Requesting a
+new code consumes older unconsumed codes. A successful recovery replaces the
+password, consumes every outstanding code and revokes every active session.
+
+Production requires these server-side settings:
+
+```text
+PasswordReset__CodeLength=<confirmed code length from 4 through 9>
+Resend__ApiKey=<Resend API key>
+Resend__FromAddress=OriSync <password-reset@verified-domain>
+```
+
+The API key must remain a Render secret. The sender address must use the Resend
+domain that will be verified later. Until both Resend settings and the code
+length exist, the public endpoint deliberately returns its generic response but
+does not create a usable reset code.
 
 ## One-time admin bootstrap
 
@@ -100,8 +116,9 @@ once.
 
 `AddAuthenticationRecovery` adds the optional admin recovery-code hash and its
 issue time to `accounts`. `PersistDataProtectionKeys` adds the shared Data
-Protection key ring. Apply migrations before enabling the authentication UI
-against an existing database:
+Protection key ring. `AddMentorPasswordResetOtps` adds the hashed, expiring OTP
+records. Apply migrations before enabling the authentication UI against an
+existing database:
 
 ```powershell
 dotnet ef database update --project src/OriSync.Api --startup-project src/OriSync.Api

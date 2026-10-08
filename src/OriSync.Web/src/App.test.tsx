@@ -62,7 +62,7 @@ describe('App authentication', () => {
     )
   })
 
-  it('opens the mentor-number reset form', async () => {
+  it('opens the email OTP reset form', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(null, 401)))
     const user = userEvent.setup()
 
@@ -71,6 +71,32 @@ describe('App authentication', () => {
 
     expect(screen.getByRole('heading', { name: 'Reset password' })).toBeInTheDocument()
     expect(screen.getByLabelText('Mentor number')).toBeInTheDocument()
+    expect(screen.getByLabelText('Login email')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Reset code')).not.toBeInTheDocument()
+  })
+
+  it('shows the OTP and new-password fields after a reset code request', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(null, 401))
+      .mockResolvedValueOnce(response({ requestToken: 'csrf-token' }))
+      .mockResolvedValueOnce(response({
+        message: 'If the mentor account exists, a password reset code was sent.',
+      }, 202))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Mentor forgot password' }))
+    await user.type(screen.getByLabelText('Mentor number'), '223450002')
+    await user.type(screen.getByLabelText('Login email'), 'mentor@orisync.test')
+    await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+
+    expect(await screen.findByLabelText('Reset code')).toBeInTheDocument()
+    expect(screen.getByLabelText('New password')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/auth/mentor-password-reset/request',
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 })
 

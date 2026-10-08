@@ -6,7 +6,15 @@ public sealed record LoginRequest(string Email, string Password);
 
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
-public sealed record ResetMentorPasswordRequest(string MentorNumber, string NewPassword);
+public sealed record RequestMentorPasswordResetRequest(string MentorNumber, string Email);
+
+public sealed record CompleteMentorPasswordResetRequest(
+    string MentorNumber,
+    string Email,
+    string Code,
+    string NewPassword);
+
+public sealed record PasswordResetRequestResponse(string Message);
 
 public sealed record RecoverAdminRequest(
     string Email,

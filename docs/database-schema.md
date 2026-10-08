@@ -1,7 +1,7 @@
 # Database schema
 
-OriSync uses nine application tables in PostgreSQL. Entity Framework Core owns
-the migration history; generated register PDFs are never stored in the database.
+OriSync uses eleven PostgreSQL tables. Entity Framework Core owns the migration
+history; generated register PDFs are never stored in the database.
 
 | Table | Responsibility |
 | --- | --- |
@@ -13,7 +13,9 @@ the migration history; generated register PDFs are never stored in the database.
 | `student_enrollments` | A student's orientation membership, current or pending group and current QR version |
 | `attendance_records` | One attendance row per enrolled student and date, with a historical group snapshot |
 | `sessions` | Hashed server sessions, activity and revocation state |
+| `password_reset_otps` | Hashed mentor recovery codes, delivery state, expiry and failed attempts |
 | `audit_events` | Short-lived records for sensitive changes, expiring after the configured 14-day period |
+| `data_protection_keys` | Shared ASP.NET Core key ring for antiforgery and protected server payloads |
 
 ## Enforced invariants
 
@@ -40,12 +42,12 @@ The application services implemented in later features must still verify that
 an account's role matches its person type, that student email types are present,
 and that attendance dates fall inside the configured weekday calendar.
 
-## Supabase boundary
+## Neon boundary
 
-All nine application tables have PostgreSQL row-level security enabled and no
-browser-client policies. The React application must never connect to Supabase
-directly. The ASP.NET Core backend uses the private database connection and is
-the sole data-access boundary.
+All tables have PostgreSQL row-level security enabled and no browser-client
+policies. The React application must never connect to Neon directly. The ASP.NET
+Core backend uses the private database connection and is the sole data-access
+boundary.
 
 ## Applying the migration
 
@@ -57,7 +59,6 @@ dotnet tool restore
 dotnet ef database update --project src/OriSync.Api --startup-project src/OriSync.Api
 ```
 
-For a persistent backend such as Render, use a Supabase direct connection when
-IPv6 is available or the session pooler when it is not. Require TLS in the
-connection string. Transaction-mode pooling is not appropriate for EF Core
-migrations.
+For Render, use the Neon pooled connection for normal application traffic and a
+direct connection for schema migrations when available. Require TLS in both
+connection strings.

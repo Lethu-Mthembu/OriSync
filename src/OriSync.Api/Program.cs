@@ -36,7 +36,17 @@ builder.Services
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
+builder.Services.AddScoped<IPasswordHasher<PasswordResetOtp>, PasswordHasher<PasswordResetOtp>>();
 builder.Services.AddScoped<OriSync.Api.Authentication.AuthenticationService>();
+builder.Services.Configure<PasswordResetOptions>(
+    builder.Configuration.GetSection(PasswordResetOptions.SectionName));
+builder.Services.Configure<ResendOptions>(
+    builder.Configuration.GetSection(ResendOptions.SectionName));
+builder.Services.AddHttpClient<IPasswordResetEmailSender, ResendPasswordResetEmailSender>(client =>
+{
+    client.BaseAddress = new Uri("https://api.resend.com/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddAuthentication(AuthenticationConstants.Scheme)
     .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
         AuthenticationConstants.Scheme,

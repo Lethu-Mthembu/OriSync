@@ -295,6 +295,34 @@ internal sealed class AccountSessionConfiguration : IEntityTypeConfiguration<Acc
     }
 }
 
+internal sealed class PasswordResetOtpConfiguration : IEntityTypeConfiguration<PasswordResetOtp>
+{
+    public void Configure(EntityTypeBuilder<PasswordResetOtp> builder)
+    {
+        builder.ToTable("password_reset_otps", table =>
+        {
+            table.HasCheckConstraint("ck_password_reset_otps_code_hash", "btrim(code_hash) <> ''");
+            table.HasCheckConstraint(
+                "ck_password_reset_otps_times",
+                "expires_at > requested_at AND (sent_at IS NULL OR sent_at >= requested_at) " +
+                "AND (consumed_at IS NULL OR consumed_at >= requested_at)");
+            table.HasCheckConstraint(
+                "ck_password_reset_otps_failed_attempts",
+                "failed_attempts BETWEEN 0 AND 5");
+        });
+
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).UseIdentityByDefaultColumn();
+        builder.Property(x => x.CodeHash).HasColumnType("text").IsRequired();
+        builder.HasIndex(x => new { x.AccountId, x.RequestedAt });
+        builder.HasIndex(x => x.ExpiresAt);
+        builder.HasOne(x => x.Account)
+            .WithMany(x => x.PasswordResetOtps)
+            .HasForeignKey(x => x.AccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEvent>
 {
     public void Configure(EntityTypeBuilder<AuditEvent> builder)
