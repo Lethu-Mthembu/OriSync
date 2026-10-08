@@ -64,6 +64,27 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ReverseProxyHttpsSchemeAllowsSecureCsrfCookie()
+    {
+        using var client = _factory!.CreateClient(
+            new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = new Uri("http://localhost"),
+                HandleCookies = false
+            });
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/auth/csrf");
+        request.Headers.Add("X-Forwarded-Proto", "https");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var csrfCookie = response.Headers.GetValues("Set-Cookie").Single();
+        Assert.Contains(AuthenticationConstants.AntiforgeryCookieName, csrfCookie, StringComparison.Ordinal);
+        Assert.Contains("secure", csrfCookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SuccessfulLoginCreatesAuthenticatedSession()
     {
         using var client = CreateClient();

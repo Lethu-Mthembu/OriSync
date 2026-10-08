@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OriSync.Api.Authentication;
@@ -84,6 +85,18 @@ if (args.Contains("--rotate-admin-recovery", StringComparer.Ordinal))
         Console.Out);
     return;
 }
+
+// Render terminates TLS at its reverse proxy. Trust only the nearest forwarded
+// hop so security components still see the original HTTPS request scheme.
+// Render's proxy addresses are dynamic, so an IP allow-list is not available.
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardLimit = 1
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 app.Use(async (context, next) =>
 {
