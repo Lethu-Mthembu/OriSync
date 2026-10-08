@@ -36,7 +36,35 @@ builder.Services
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
+builder.Services.AddScoped<IPasswordHasher<PasswordResetOtp>, PasswordHasher<PasswordResetOtp>>();
 builder.Services.AddScoped<OriSync.Api.Authentication.AuthenticationService>();
+builder.Services.AddSingleton<IPasswordResetCodeGenerator, PasswordResetCodeGenerator>();
+builder.Services.AddScoped<PasswordResetEmailOutboxProcessor>();
+builder.Services.AddHostedService<PasswordResetEmailOutboxWorker>();
+var passwordResetOptions = builder.Services.AddOptions<PasswordResetOptions>()
+    .Bind(builder.Configuration.GetSection(PasswordResetOptions.SectionName));
+var resendOptions = builder.Services.AddOptions<ResendOptions>()
+    .Bind(builder.Configuration.GetSection(ResendOptions.SectionName));
+if (!builder.Environment.IsDevelopment())
+{
+    passwordResetOptions
+        .Validate(options => options.CodeLength == 6, "PasswordReset:CodeLength must be 6.")
+        .Validate(
+            options => PasswordResetCodeGenerator.HasValidSecret(options.CodeSecret),
+            "PasswordReset:CodeSecret must be a Base64 value containing at least 32 bytes.")
+        .ValidateOnStart();
+    resendOptions
+        .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "Resend:ApiKey is required.")
+        .Validate(
+            options => options.FromEmail == "OriSync-No-reply@trainmate.nemasites.com",
+            "Resend:FromEmail must match the confirmed sender.")
+        .ValidateOnStart();
+}
+builder.Services.AddHttpClient<IPasswordResetEmailSender, ResendPasswordResetEmailSender>(client =>
+{
+    client.BaseAddress = new Uri("https://api.resend.com/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddAuthentication(AuthenticationConstants.Scheme)
     .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
         AuthenticationConstants.Scheme,
@@ -71,6 +99,17 @@ builder.Services.AddDataProtection()
     .PersistKeysToDbContext<OriSyncDbContext>();
 
 var app = builder.Build();
+
+// Render runs one free web-service instance for OriSync. Applying migrations
+// before the host starts prevents the HTTP and outbox paths from observing a
+// partially upgraded schema. This must be replaced by a single deployment job
+// before the service is ever scaled to multiple instances.
+if (app.Configuration.GetValue<bool>("DatabaseMigrations:ApplyOnStartup"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 {

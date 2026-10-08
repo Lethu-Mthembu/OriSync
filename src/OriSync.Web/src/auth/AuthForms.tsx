@@ -55,13 +55,39 @@ export function LoginForm({
 
 export function MentorResetForm({ onView }: { onView: (view: AuthView) => void }) {
   const [mentorNumber, setMentorNumber] = useState('')
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
+  const [codeRequested, setCodeRequested] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  async function submit(event: FormEvent) {
+  async function requestCode(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    setMessage('')
+    setSubmitting(true)
+    try {
+      const response = await postJson('/api/auth/mentor-password-reset/request', {
+        mentorNumber,
+        email,
+      })
+      if (!response.ok) {
+        setError(await getError(response))
+        return
+      }
+      setCodeRequested(true)
+      setMessage('If the mentor account exists, a reset code was sent. It expires in 5 minutes.')
+    } catch {
+      setError('OriSync could not reach the server. Try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function resetPassword(event: FormEvent) {
     event.preventDefault()
     setError('')
     setMessage('')
@@ -72,8 +98,10 @@ export function MentorResetForm({ onView }: { onView: (view: AuthView) => void }
 
     setSubmitting(true)
     try {
-      const response = await postJson('/api/auth/reset-mentor-password', {
+      const response = await postJson('/api/auth/mentor-password-reset/complete', {
         mentorNumber,
+        email,
+        code,
         newPassword: password,
       })
       if (!response.ok) {
@@ -88,21 +116,46 @@ export function MentorResetForm({ onView }: { onView: (view: AuthView) => void }
     }
   }
 
+  function useDifferentDetails() {
+    setCodeRequested(false)
+    setCode('')
+    setPassword('')
+    setConfirmation('')
+    setMessage('')
+    setError('')
+  }
+
   return (
-    <form className="auth-card" onSubmit={(event) => void submit(event)}>
+    <form
+      className="auth-card"
+      onSubmit={(event) => void (codeRequested ? resetPassword(event) : requestCode(event))}
+    >
       <div>
         <p className="form-kicker">Mentor account</p>
         <h2>Reset password</h2>
-        <p className="form-note">Enter the nine-digit mentor number supplied by the administrator.</p>
+        <p className="form-note">
+          Enter your nine-digit mentor number and login email. OriSync will send a one-time code to that email.
+        </p>
       </div>
       <Field label="Mentor number" value={mentorNumber} onChange={setMentorNumber} inputMode="numeric" pattern="2[0-9]{8}" />
-      <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} />
-      <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} />
+      <Field label="Login email" type="email" value={email} onChange={setEmail} autoComplete="username" />
+      {codeRequested && (
+        <>
+          <Field label="Reset code" value={code} onChange={setCode} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maximumLength={6} />
+          <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} />
+          <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} />
+        </>
+      )}
       <ErrorMessage message={error} />
       {message && <p className="success-message" role="status">{message}</p>}
       <button className="primary-button" disabled={submitting} type="submit">
-        {submitting ? 'Resetting…' : 'Reset password'}
+        {submitting ? (codeRequested ? 'Resetting…' : 'Sending…') : (codeRequested ? 'Reset password' : 'Send reset code')}
       </button>
+      {codeRequested && (
+        <button className="secondary-button" type="button" onClick={useDifferentDetails}>
+          Use different details
+        </button>
+      )}
       <button className="secondary-button" type="button" onClick={() => onView('login')}>Back to sign in</button>
     </form>
   )
@@ -235,6 +288,7 @@ function Field({
   onChange,
   type = 'text',
   minimumLength,
+  maximumLength,
   ...inputProps
 }: {
   label: string
@@ -242,6 +296,7 @@ function Field({
   onChange: (value: string) => void
   type?: string
   minimumLength?: number
+  maximumLength?: number
   autoComplete?: string
   inputMode?: 'numeric' | 'text'
   pattern?: string
@@ -255,6 +310,7 @@ function Field({
         type={type}
         value={value}
         minLength={minimumLength}
+        maxLength={maximumLength}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>

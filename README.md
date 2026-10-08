@@ -21,7 +21,7 @@ The current foundation contains:
 
 Feature 3 adds admin and mentor authentication with secure host-only cookies,
 CSRF protection, single active sessions, inactivity and absolute expiry,
-password changes, mentor-number reset and one-time admin recovery.
+password changes, email-OTP mentor recovery and one-time admin recovery.
 
 ## Prerequisites
 
@@ -61,10 +61,12 @@ terminates public HTTPS at its reverse proxy.
 
 ## Database schema
 
-Feature 2 defines nine PostgreSQL application tables through Entity Framework
-Core migrations. Database identifiers use lowercase snake case, foreign keys
-are indexed and row-level security is enabled without client policies. OriSync
-therefore accesses Neon PostgreSQL only through the ASP.NET Core backend.
+The current schema contains twelve PostgreSQL tables through Entity Framework
+Core migrations: nine domain tables, password-reset OTP and email-outbox tables,
+and the shared ASP.NET Core Data Protection key ring. Database identifiers use
+lowercase snake case, foreign keys are indexed and row-level security is enabled
+without client policies. OriSync accesses Neon PostgreSQL only through the
+ASP.NET Core backend.
 
 Set the backend connection without committing it:
 

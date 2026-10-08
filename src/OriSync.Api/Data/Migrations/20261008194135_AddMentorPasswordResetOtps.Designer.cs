@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OriSync.Api.Data;
@@ -11,9 +12,11 @@ using OriSync.Api.Data;
 namespace OriSync.Api.Data.Migrations
 {
     [DbContext(typeof(OriSyncDbContext))]
-    partial class OriSyncDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008194135_AddMentorPasswordResetOtps")]
+    partial class AddMentorPasswordResetOtps
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -455,82 +458,6 @@ namespace OriSync.Api.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OriSync.Api.Domain.PasswordResetEmailOutbox", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<int>("AttemptCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("attempt_count");
-
-                    b.Property<DateTimeOffset>("AvailableAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("available_at");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTimeOffset>("DiscardAfter")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("discard_after");
-
-                    b.Property<DateTimeOffset?>("DiscardedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("discarded_at");
-
-                    b.Property<long>("PasswordResetOtpId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("password_reset_otp_id");
-
-                    b.Property<string>("RecipientEmail")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("recipient_email");
-
-                    b.Property<string>("RecipientFirstName")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("recipient_first_name");
-
-                    b.Property<DateTimeOffset?>("SentAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("sent_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_password_reset_email_outbox");
-
-                    b.HasIndex("DiscardAfter")
-                        .HasDatabaseName("ix_password_reset_email_outbox_discard_after")
-                        .HasFilter("sent_at IS NULL AND discarded_at IS NULL");
-
-                    b.HasIndex("PasswordResetOtpId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_password_reset_email_outbox_password_reset_otp_id");
-
-                    b.HasIndex("AvailableAt", "Id")
-                        .HasDatabaseName("ix_password_reset_email_outbox_available_at_id")
-                        .HasFilter("sent_at IS NULL AND discarded_at IS NULL");
-
-                    b.ToTable("password_reset_email_outbox", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_password_reset_email_outbox_attempts", "attempt_count BETWEEN 0 AND 20");
-
-                            t.HasCheckConstraint("ck_password_reset_email_outbox_name", "btrim(recipient_first_name) <> ''");
-
-                            t.HasCheckConstraint("ck_password_reset_email_outbox_recipient", "position('@' in recipient_email) > 1");
-
-                            t.HasCheckConstraint("ck_password_reset_email_outbox_terminal_state", "sent_at IS NULL OR discarded_at IS NULL");
-
-                            t.HasCheckConstraint("ck_password_reset_email_outbox_times", "available_at >= created_at AND discard_after > created_at AND (sent_at IS NULL OR sent_at >= created_at) AND (discarded_at IS NULL OR discarded_at >= created_at)");
-                        });
-                });
-
             modelBuilder.Entity("OriSync.Api.Domain.PasswordResetOtp", b =>
                 {
                     b.Property<long>("Id")
@@ -549,15 +476,11 @@ namespace OriSync.Api.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("code_hash");
 
-                    b.Property<string>("CodeNonce")
-                        .HasColumnType("text")
-                        .HasColumnName("code_nonce");
-
                     b.Property<DateTimeOffset?>("ConsumedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("consumed_at");
 
-                    b.Property<DateTimeOffset?>("ExpiresAt")
+                    b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
@@ -588,7 +511,7 @@ namespace OriSync.Api.Data.Migrations
 
                             t.HasCheckConstraint("ck_password_reset_otps_failed_attempts", "failed_attempts BETWEEN 0 AND 5");
 
-                            t.HasCheckConstraint("ck_password_reset_otps_times", "((sent_at IS NULL AND expires_at IS NULL) OR (sent_at IS NOT NULL AND expires_at > sent_at)) AND (consumed_at IS NULL OR consumed_at >= requested_at)");
+                            t.HasCheckConstraint("ck_password_reset_otps_times", "expires_at > requested_at AND (sent_at IS NULL OR sent_at >= requested_at) AND (consumed_at IS NULL OR consumed_at >= requested_at)");
                         });
                 });
 
@@ -898,18 +821,6 @@ namespace OriSync.Api.Data.Migrations
                     b.Navigation("Orientation");
                 });
 
-            modelBuilder.Entity("OriSync.Api.Domain.PasswordResetEmailOutbox", b =>
-                {
-                    b.HasOne("OriSync.Api.Domain.PasswordResetOtp", "PasswordResetOtp")
-                        .WithOne("EmailOutbox")
-                        .HasForeignKey("OriSync.Api.Domain.PasswordResetEmailOutbox", "PasswordResetOtpId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_password_reset_email_outbox_password_reset_otps_password_re");
-
-                    b.Navigation("PasswordResetOtp");
-                });
-
             modelBuilder.Entity("OriSync.Api.Domain.PasswordResetOtp", b =>
                 {
                     b.HasOne("OriSync.Api.Domain.Account", "Account")
@@ -985,11 +896,6 @@ namespace OriSync.Api.Data.Migrations
                     b.Navigation("Groups");
 
                     b.Navigation("StudentEnrollments");
-                });
-
-            modelBuilder.Entity("OriSync.Api.Domain.PasswordResetOtp", b =>
-                {
-                    b.Navigation("EmailOutbox");
                 });
 
             modelBuilder.Entity("OriSync.Api.Domain.Person", b =>

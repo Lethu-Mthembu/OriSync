@@ -12,3 +12,5 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Staging
+      - key: DatabaseMigrations__ApplyOnStartup
+        value: "true"

@@ -295,6 +295,78 @@ internal sealed class AccountSessionConfiguration : IEntityTypeConfiguration<Acc
     }
 }
 
+internal sealed class PasswordResetOtpConfiguration : IEntityTypeConfiguration<PasswordResetOtp>
+{
+    public void Configure(EntityTypeBuilder<PasswordResetOtp> builder)
+    {
+        builder.ToTable("password_reset_otps", table =>
+        {
+            table.HasCheckConstraint("ck_password_reset_otps_code_hash", "btrim(code_hash) <> ''");
+            table.HasCheckConstraint(
+                "ck_password_reset_otps_times",
+                "((sent_at IS NULL AND expires_at IS NULL) OR " +
+                "(sent_at IS NOT NULL AND expires_at > sent_at)) " +
+                "AND (consumed_at IS NULL OR consumed_at >= requested_at)");
+            table.HasCheckConstraint(
+                "ck_password_reset_otps_failed_attempts",
+                "failed_attempts BETWEEN 0 AND 5");
+        });
+
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).UseIdentityByDefaultColumn();
+        builder.Property(x => x.CodeHash).HasColumnType("text").IsRequired();
+        builder.Property(x => x.CodeNonce).HasColumnType("text");
+        builder.HasIndex(x => new { x.AccountId, x.RequestedAt });
+        builder.HasIndex(x => x.ExpiresAt);
+        builder.HasOne(x => x.Account)
+            .WithMany(x => x.PasswordResetOtps)
+            .HasForeignKey(x => x.AccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class PasswordResetEmailOutboxConfiguration
+    : IEntityTypeConfiguration<PasswordResetEmailOutbox>
+{
+    public void Configure(EntityTypeBuilder<PasswordResetEmailOutbox> builder)
+    {
+        builder.ToTable("password_reset_email_outbox", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_password_reset_email_outbox_recipient",
+                "position('@' in recipient_email) > 1");
+            table.HasCheckConstraint(
+                "ck_password_reset_email_outbox_name",
+                "btrim(recipient_first_name) <> ''");
+            table.HasCheckConstraint(
+                "ck_password_reset_email_outbox_times",
+                "available_at >= created_at AND discard_after > created_at " +
+                "AND (sent_at IS NULL OR sent_at >= created_at) " +
+                "AND (discarded_at IS NULL OR discarded_at >= created_at)");
+            table.HasCheckConstraint(
+                "ck_password_reset_email_outbox_terminal_state",
+                "sent_at IS NULL OR discarded_at IS NULL");
+            table.HasCheckConstraint(
+                "ck_password_reset_email_outbox_attempts",
+                "attempt_count BETWEEN 0 AND 20");
+        });
+
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).UseIdentityByDefaultColumn();
+        builder.Property(x => x.RecipientEmail).HasColumnType("text").IsRequired();
+        builder.Property(x => x.RecipientFirstName).HasColumnType("text").IsRequired();
+        builder.HasIndex(x => x.PasswordResetOtpId).IsUnique();
+        builder.HasIndex(x => new { x.AvailableAt, x.Id })
+            .HasFilter("sent_at IS NULL AND discarded_at IS NULL");
+        builder.HasIndex(x => x.DiscardAfter)
+            .HasFilter("sent_at IS NULL AND discarded_at IS NULL");
+        builder.HasOne(x => x.PasswordResetOtp)
+            .WithOne(x => x.EmailOutbox)
+            .HasForeignKey<PasswordResetEmailOutbox>(x => x.PasswordResetOtpId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEvent>
 {
     public void Configure(EntityTypeBuilder<AuditEvent> builder)

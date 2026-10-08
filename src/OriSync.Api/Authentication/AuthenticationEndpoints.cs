@@ -25,7 +25,9 @@ public static partial class AuthenticationEndpoints
             .RequireAuthorization();
         authentication.MapPost("/change-password", ChangePasswordAsync)
             .RequireAuthorization();
-        authentication.MapPost("/reset-mentor-password", ResetMentorPasswordAsync)
+        authentication.MapPost("/mentor-password-reset/request", RequestMentorPasswordResetAsync)
+            .AllowAnonymous();
+        authentication.MapPost("/mentor-password-reset/complete", CompleteMentorPasswordResetAsync)
             .AllowAnonymous();
         authentication.MapPost("/recover-admin", RecoverAdminAsync)
             .AllowAnonymous();
@@ -162,30 +164,60 @@ public static partial class AuthenticationEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> ResetMentorPasswordAsync(
-        ResetMentorPasswordRequest request,
+    private static async Task<IResult> RequestMentorPasswordResetAsync(
+        RequestMentorPasswordResetRequest request,
+        AuthenticationService authenticationService,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = timeProvider.GetTimestamp();
+        // The same response is returned for malformed, unknown, rate-limited and
+        // delivery-failed requests so this endpoint cannot enumerate accounts.
+        if (MentorNumberPattern().IsMatch(request.MentorNumber) && IsEmail(request.Email))
+        {
+            await authenticationService.RequestMentorPasswordResetAsync(
+                request.MentorNumber,
+                request.Email,
+                cancellationToken);
+        }
+
+        var remainingDelay = PasswordResetConstants.MinimumRequestDuration -
+            timeProvider.GetElapsedTime(startedAt);
+        if (remainingDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(remainingDelay, timeProvider, cancellationToken);
+        }
+
+        return Results.Accepted(value: new PasswordResetRequestResponse(
+            "If the mentor account exists, a password reset code was sent."));
+    }
+
+    private static async Task<IResult> CompleteMentorPasswordResetAsync(
+        CompleteMentorPasswordResetRequest request,
         AuthenticationService authenticationService,
         CancellationToken cancellationToken)
     {
-        if (!MentorNumberPattern().IsMatch(request.MentorNumber) ||
-            !PasswordRules.IsValid(request.NewPassword))
+        if (!PasswordRules.IsValid(request.NewPassword))
         {
-            return Results.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Password reset failed.",
-                detail: "Enter a valid mentor number and a password of at least eight characters.");
+            return PasswordValidationProblem();
         }
 
-        var reset = await authenticationService.ResetMentorPasswordAsync(
+        if (!MentorNumberPattern().IsMatch(request.MentorNumber) ||
+            !IsEmail(request.Email) ||
+            string.IsNullOrWhiteSpace(request.Code))
+        {
+            return InvalidMentorPasswordReset();
+        }
+
+        var reset = await authenticationService.CompleteMentorPasswordResetAsync(
             request.MentorNumber,
+            request.Email,
+            request.Code,
             request.NewPassword,
             cancellationToken);
         return reset
             ? Results.NoContent()
-            : Results.Problem(
-                statusCode: StatusCodes.Status404NotFound,
-                title: "Password reset failed.",
-                detail: "No active mentor account matches that number.");
+            : InvalidMentorPasswordReset();
     }
 
     private static async Task<IResult> RecoverAdminAsync(
@@ -248,6 +280,11 @@ public static partial class AuthenticationEndpoints
         statusCode: StatusCodes.Status400BadRequest,
         title: "Admin recovery failed.",
         detail: "The email, recovery code or new password is invalid.");
+
+    private static IResult InvalidMentorPasswordReset() => Results.Problem(
+        statusCode: StatusCodes.Status400BadRequest,
+        title: "Password reset failed.",
+        detail: "The reset code is invalid or has expired.");
 
     [GeneratedRegex("^2[0-9]{8}$", RegexOptions.CultureInvariant)]
     private static partial Regex MentorNumberPattern();

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OriSync.Api.Data;
@@ -11,9 +12,11 @@ using OriSync.Api.Data;
 namespace OriSync.Api.Data.Migrations
 {
     [DbContext(typeof(OriSyncDbContext))]
-    partial class OriSyncDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008200649_AddPasswordResetEmailOutbox")]
+    partial class AddPasswordResetEmailOutbox
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

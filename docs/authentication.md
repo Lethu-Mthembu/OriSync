@@ -50,19 +50,43 @@ hop only; forwarded client IP addresses are ignored.
 | POST | `/api/auth/activity` | Required | Record real user interaction |
 | POST | `/api/auth/logout` | Required | Revoke the current session |
 | POST | `/api/auth/change-password` | Required | Change password and revoke all sessions |
-| POST | `/api/auth/reset-mentor-password` | Anonymous | Reset a mentor using the mentor number |
+| POST | `/api/auth/mentor-password-reset/request` | Anonymous | Request a mentor reset code using mentor number and login email |
+| POST | `/api/auth/mentor-password-reset/complete` | Anonymous | Verify the code and replace the mentor password |
 | POST | `/api/auth/recover-admin` | Anonymous | Recover the sole admin using a one-time code |
 
 Every POST requires `X-CSRF-TOKEN`, including anonymous POSTs.
 
-## Accepted security exception
+## Mentor password recovery
 
-Mentor password reset deliberately requires only a nine-digit mentor number and
-a new password. It has no email verification, MFA, lockout or rate limit. Anyone
-who learns a mentor number can take over that account. Hiding mentor numbers from
-mentor-facing responses reduces exposure but does not make this reset secure.
-This is an explicitly accepted product risk, not a recommended authentication
-design.
+Mentor recovery requires the exact nine-digit mentor number and login email.
+The request endpoint always returns the same accepted response for malformed,
+unknown, rate-limited and delivery-failed requests and takes at least 500 ms to
+reduce account-enumeration timing differences. A numeric code is queued only for
+the matching login email. Codes allow five failed verification attempts, have a
+60-second request cooldown and are limited to five requests per account per
+hour.
+
+The request transaction stores the salted code hash, a non-secret nonce and a
+durable email-outbox row; it never stores the numeric code. A background worker
+derives the same code from the nonce and a server secret, then sends through
+Resend with an idempotency key. Failed deliveries retry with capped exponential
+backoff for up to five minutes. After Resend accepts the message, the nonce is
+removed and the code receives its full five-minute lifetime. Delivering a new
+code consumes older unconsumed codes. A successful recovery replaces the
+password, consumes every outstanding code and revokes every active session.
+
+Production requires these server-side settings:
+
+```text
+PasswordReset__CodeSecret=<Base64 encoding of at least 32 random bytes>
+Resend__ApiKey=<Resend API key>
+Resend__FromEmail=OriSync-No-reply@trainmate.nemasites.com
+```
+
+OriSync uses six-digit reset codes. The API key must remain a Render secret. The
+confirmed sender is `OriSync-No-reply@trainmate.nemasites.com` and is committed
+as non-secret configuration. Until both secrets exist, the Staging/Production
+application refuses to start instead of exposing a reset flow that cannot send.
 
 ## One-time admin bootstrap
 
@@ -100,8 +124,18 @@ once.
 
 `AddAuthenticationRecovery` adds the optional admin recovery-code hash and its
 issue time to `accounts`. `PersistDataProtectionKeys` adds the shared Data
-Protection key ring. Apply migrations before enabling the authentication UI
-against an existing database:
+Protection key ring. `AddMentorPasswordResetOtps` adds the hashed, expiring OTP
+records. `AddPasswordResetEmailOutbox` adds durable delivery and changes OTP
+expiry to start after successful delivery.
+
+The single-instance Render development service sets
+`DatabaseMigrations__ApplyOnStartup=true`. The application applies pending EF
+Core migrations before starting HTTP traffic or the email worker. This is
+acceptable only while Render runs one instance. If the service is scaled out,
+migrations must move to one deployment job to prevent multiple instances from
+competing during startup.
+
+For local or manual migration execution, run:
 
 ```powershell
 dotnet ef database update --project src/OriSync.Api --startup-project src/OriSync.Api

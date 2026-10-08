@@ -1,8 +1,10 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OriSync.Api.Authentication;
@@ -24,12 +26,22 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         .Build();
 
     private WebApplicationFactory<Program>? _factory;
+    private readonly RecordingPasswordResetEmailSender _emailSender = new();
 
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.UseSetting("ConnectionStrings:OriSync", _postgres.GetConnectionString()));
+        {
+            builder.UseSetting("ConnectionStrings:OriSync", _postgres.GetConnectionString());
+            builder.UseSetting("PasswordReset:CodeLength", "6");
+            builder.UseSetting(
+                "PasswordReset:CodeSecret",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
+            builder.UseSetting("PasswordReset:DispatcherEnabled", "false");
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPasswordResetEmailSender>(_emailSender));
+        });
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
@@ -38,6 +50,11 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         await SeedMentorAsync(dbContext, "223450002", "reset@orisync.test");
         await SeedMentorAsync(dbContext, "223450003", "change@orisync.test");
         await SeedMentorAsync(dbContext, "223450004", "expiry@orisync.test");
+        await SeedMentorAsync(dbContext, "223450005", "cooldown@orisync.test");
+        await SeedMentorAsync(dbContext, "223450006", "otp-expiry@orisync.test");
+        await SeedMentorAsync(dbContext, "223450007", "attempts@orisync.test");
+        await SeedMentorAsync(dbContext, "223450008", "hourly-limit@orisync.test");
+        await SeedMentorAsync(dbContext, "223450009", "outbox@orisync.test");
         await SeedAdminAsync(dbContext);
     }
 
@@ -127,7 +144,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task MentorNumberResetRevokesSessionAndReplacesPassword()
+    public async Task MentorEmailOtpResetRevokesSessionAndReplacesPassword()
     {
         using var signedInClient = CreateClient();
         using var resetClient = CreateClient();
@@ -136,12 +153,30 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             (await LoginAsync(signedInClient, "reset@orisync.test", OriginalPassword)).StatusCode);
 
         var csrf = await GetCsrfAsync(resetClient);
-        using var resetRequest = new HttpRequestMessage(
+        using var requestCode = new HttpRequestMessage(
             HttpMethod.Post,
-            "/api/auth/reset-mentor-password")
+            "/api/auth/mentor-password-reset/request")
         {
             Content = JsonContent.Create(
-                new ResetMentorPasswordRequest("223450002", "replacement-password"))
+                new RequestMentorPasswordResetRequest("223450002", "reset@orisync.test"))
+        };
+        requestCode.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
+        var requested = await resetClient.SendAsync(requestCode);
+        Assert.Equal(HttpStatusCode.Accepted, requested.StatusCode);
+        Assert.Equal(0, _emailSender.SendCount);
+        await DispatchPasswordResetEmailAsync();
+        Assert.Equal("reset@orisync.test", _emailSender.LastRecipient);
+        Assert.Matches("^[0-9]{6}$", _emailSender.LastCode);
+
+        using var resetRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/auth/mentor-password-reset/complete")
+        {
+            Content = JsonContent.Create(new CompleteMentorPasswordResetRequest(
+                "223450002",
+                "reset@orisync.test",
+                _emailSender.LastCode!,
+                "replacement-password"))
         };
         resetRequest.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
         var reset = await resetClient.SendAsync(resetRequest);
@@ -156,6 +191,221 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         Assert.Equal(
             HttpStatusCode.OK,
             (await LoginAsync(resetClient, "reset@orisync.test", "replacement-password")).StatusCode);
+    }
+
+    [Fact]
+    public async Task PasswordResetOutboxRetriesSameCodeAndStartsExpiryAfterDelivery()
+    {
+        _emailSender.FailuresRemaining = 1;
+        using var client = CreateClient();
+        var csrf = await GetCsrfAsync(client);
+
+        var response = await RequestPasswordResetAsync(
+            client,
+            csrf,
+            "223450009",
+            "outbox@orisync.test");
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(0, _emailSender.SendCount);
+        await DispatchPasswordResetEmailAsync();
+        Assert.Equal(1, _emailSender.SendCount);
+
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+            var queued = await dbContext.PasswordResetEmailOutbox
+                .Include(item => item.PasswordResetOtp)
+                .SingleAsync(item =>
+                    item.PasswordResetOtp.Account.Person.InstitutionNumber == "223450009");
+            Assert.Equal(1, queued.AttemptCount);
+            Assert.Null(queued.SentAt);
+            Assert.Null(queued.PasswordResetOtp.SentAt);
+            Assert.Null(queued.PasswordResetOtp.ExpiresAt);
+            Assert.NotNull(queued.PasswordResetOtp.CodeNonce);
+            queued.AvailableAt = DateTimeOffset.UtcNow;
+            await dbContext.SaveChangesAsync();
+        }
+
+        await DispatchPasswordResetEmailAsync();
+
+        Assert.Equal(2, _emailSender.SendCount);
+        Assert.Equal(2, _emailSender.SentCodes.Count);
+        Assert.Equal(_emailSender.SentCodes[0], _emailSender.SentCodes[1]);
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+            var delivered = await dbContext.PasswordResetEmailOutbox
+                .Include(item => item.PasswordResetOtp)
+                .SingleAsync(item =>
+                    item.PasswordResetOtp.Account.Person.InstitutionNumber == "223450009");
+            Assert.NotNull(delivered.SentAt);
+            Assert.Null(delivered.DiscardedAt);
+            Assert.Null(delivered.PasswordResetOtp.CodeNonce);
+            Assert.Equal(delivered.SentAt, delivered.PasswordResetOtp.SentAt);
+            Assert.Equal(
+                PasswordResetConstants.OtpLifetime,
+                delivered.PasswordResetOtp.ExpiresAt - delivered.PasswordResetOtp.SentAt);
+        }
+    }
+
+    [Fact]
+    public async Task PasswordResetRequestDoesNotRevealWhetherMentorExists()
+    {
+        using var client = CreateClient();
+        var csrf = await GetCsrfAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/auth/mentor-password-reset/request")
+        {
+            Content = JsonContent.Create(
+                new RequestMentorPasswordResetRequest("223459999", "missing@orisync.test"))
+        };
+        request.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<PasswordResetRequestResponse>();
+        Assert.Equal("If the mentor account exists, a password reset code was sent.", payload!.Message);
+    }
+
+    [Fact]
+    public async Task PasswordResetRequestEnforcesSixtySecondCooldown()
+    {
+        using var client = CreateClient();
+        var csrf = await GetCsrfAsync(client);
+
+        var first = await RequestPasswordResetAsync(
+            client,
+            csrf,
+            "223450005",
+            "cooldown@orisync.test");
+        var second = await RequestPasswordResetAsync(
+            client,
+            csrf,
+            "223450005",
+            "cooldown@orisync.test");
+
+        Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, second.StatusCode);
+        await DispatchPasswordResetEmailAsync();
+        Assert.Equal(1, _emailSender.SendCount);
+    }
+
+    [Fact]
+    public async Task PasswordResetRequestEnforcesFiveRequestsPerHour()
+    {
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+            var accountId = await dbContext.Accounts
+                .Where(account => account.Person.InstitutionNumber == "223450008")
+                .Select(account => account.Id)
+                .SingleAsync();
+            var now = DateTimeOffset.UtcNow;
+            for (var index = 1; index <= 5; index++)
+            {
+                var otp = new PasswordResetOtp
+                {
+                    AccountId = accountId,
+                    RequestedAt = now.Subtract(TimeSpan.FromMinutes(index * 5)),
+                    ExpiresAt = now.Subtract(TimeSpan.FromMinutes(index * 5 - 5)),
+                    SentAt = now.Subtract(TimeSpan.FromMinutes(index * 5)),
+                    ConsumedAt = now.Subtract(TimeSpan.FromMinutes(index * 5 - 1))
+                };
+                otp.CodeHash = new PasswordHasher<PasswordResetOtp>().HashPassword(
+                    otp,
+                    index.ToString("D6", CultureInfo.InvariantCulture));
+                dbContext.PasswordResetOtps.Add(otp);
+            }
+
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var client = CreateClient();
+        var csrf = await GetCsrfAsync(client);
+        var response = await RequestPasswordResetAsync(
+            client,
+            csrf,
+            "223450008",
+            "hourly-limit@orisync.test");
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(0, _emailSender.SendCount);
+    }
+
+    [Fact]
+    public async Task ExpiredPasswordResetCodeIsRejected()
+    {
+        using var client = CreateClient();
+        var csrf = await GetCsrfAsync(client);
+        await RequestPasswordResetAsync(
+            client,
+            csrf,
+            "223450006",
+            "otp-expiry@orisync.test");
+        await DispatchPasswordResetEmailAsync();
+
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+            var requestedAt = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(6));
+            await dbContext.PasswordResetOtps
+                .Where(otp => otp.Account.Person.InstitutionNumber == "223450006")
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(otp => otp.RequestedAt, requestedAt)
+                    .SetProperty(otp => otp.SentAt, requestedAt)
+                    .SetProperty(
+                        otp => otp.ExpiresAt,
+                        DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1))));
+        }
+
+        var response = await CompletePasswordResetAsync(
+            client,
+            csrf,
+            "223450006",
+            "otp-expiry@orisync.test",
+            _emailSender.LastCode!,
+            "replacement-password");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PasswordResetCodeIsLockedAfterFiveFailedAttempts()
+    {
+        using var client = CreateClient();
+        var csrf = await GetCsrfAsync(client);
+        await RequestPasswordResetAsync(
+            client,
+            csrf,
+            "223450007",
+            "attempts@orisync.test");
+        await DispatchPasswordResetEmailAsync();
+        var validCode = _emailSender.LastCode!;
+        var invalidCode = validCode == "000000" ? "111111" : "000000";
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var rejected = await CompletePasswordResetAsync(
+                client,
+                csrf,
+                "223450007",
+                "attempts@orisync.test",
+                invalidCode,
+                "replacement-password");
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        }
+
+        var locked = await CompletePasswordResetAsync(
+            client,
+            csrf,
+            "223450007",
+            "attempts@orisync.test",
+            validCode,
+            "replacement-password");
+        Assert.Equal(HttpStatusCode.BadRequest, locked.StatusCode);
     }
 
     [Fact]
@@ -276,6 +526,52 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         return payload!.RequestToken;
     }
 
+    private static async Task<HttpResponseMessage> RequestPasswordResetAsync(
+        HttpClient client,
+        string csrf,
+        string mentorNumber,
+        string email)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/auth/mentor-password-reset/request")
+        {
+            Content = JsonContent.Create(new RequestMentorPasswordResetRequest(mentorNumber, email))
+        };
+        request.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> CompletePasswordResetAsync(
+        HttpClient client,
+        string csrf,
+        string mentorNumber,
+        string email,
+        string code,
+        string newPassword)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/auth/mentor-password-reset/complete")
+        {
+            Content = JsonContent.Create(new CompleteMentorPasswordResetRequest(
+                mentorNumber,
+                email,
+                code,
+                newPassword))
+        };
+        request.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
+        return await client.SendAsync(request);
+    }
+
+    private async Task DispatchPasswordResetEmailAsync()
+    {
+        await using var scope = _factory!.Services.CreateAsyncScope();
+        var processor = scope.ServiceProvider
+            .GetRequiredService<PasswordResetEmailOutboxProcessor>();
+        Assert.True(await processor.ProcessOneAsync(CancellationToken.None));
+    }
+
     private static async Task SeedMentorAsync(
         OriSyncDbContext dbContext,
         string mentorNumber,
@@ -344,5 +640,34 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             .HashPassword(account, OriginalPassword);
         dbContext.Accounts.Add(account);
         await dbContext.SaveChangesAsync();
+    }
+
+    private sealed class RecordingPasswordResetEmailSender : IPasswordResetEmailSender
+    {
+        public string? LastRecipient { get; private set; }
+        public string? LastCode { get; private set; }
+        public int SendCount { get; private set; }
+        public int FailuresRemaining { get; set; }
+        public List<string> SentCodes { get; } = [];
+
+        public Task<bool> SendAsync(
+            string recipient,
+            string firstName,
+            string code,
+            string idempotencyKey,
+            CancellationToken cancellationToken)
+        {
+            LastRecipient = recipient;
+            LastCode = code;
+            SendCount++;
+            SentCodes.Add(code);
+            if (FailuresRemaining <= 0)
+            {
+                return Task.FromResult(true);
+            }
+
+            FailuresRemaining--;
+            return Task.FromResult(false);
+        }
     }
 }

@@ -19,4 +19,5 @@ public sealed class Account
     public Person Person { get; set; } = null!;
     public OrientationGroup? CurrentGroup { get; set; }
     public ICollection<AccountSession> Sessions { get; } = [];
+    public ICollection<PasswordResetOtp> PasswordResetOtps { get; } = [];
 }
