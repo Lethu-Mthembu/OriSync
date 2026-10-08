@@ -9,6 +9,7 @@ using OriSync.Api.Authentication;
 using OriSync.Api.Data;
 using OriSync.Api.Domain;
 using OriSync.Api.Health;
+using OriSync.Api.OrientationManagement;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +41,7 @@ builder.Services.AddScoped<IPasswordHasher<PasswordResetOtp>, PasswordHasher<Pas
 builder.Services.AddScoped<OriSync.Api.Authentication.AuthenticationService>();
 builder.Services.AddSingleton<IPasswordResetCodeGenerator, PasswordResetCodeGenerator>();
 builder.Services.AddScoped<PasswordResetEmailOutboxProcessor>();
+builder.Services.AddScoped<OrientationManagementService>();
 builder.Services.AddHostedService<PasswordResetEmailOutboxWorker>();
 var passwordResetOptions = builder.Services.AddOptions<PasswordResetOptions>()
     .Bind(builder.Configuration.GetSection(PasswordResetOptions.SectionName));
@@ -189,6 +191,7 @@ app.MapGet("/api/status", (IHostEnvironment environment) => Results.Ok(new
 }));
 
 app.MapAuthenticationEndpoints();
+app.MapOrientationManagementEndpoints();
 
 app.MapFallbackToFile("index.html");
 

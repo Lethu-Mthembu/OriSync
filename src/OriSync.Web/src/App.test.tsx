@@ -39,6 +39,23 @@ describe('App authentication', () => {
     expect(screen.getByText('No group is assigned. Contact the administrator.')).toBeInTheDocument()
   })
 
+  it('opens orientation settings only for the admin', async () => {
+    const adminSession = {
+      ...signedInSession,
+      firstName: 'Admin',
+      surname: 'User',
+      role: 'Admin',
+    }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(response(adminSession))
+      .mockResolvedValueOnce(response([])))
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Orientations and groups' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create orientation' })).toBeInTheDocument()
+  })
+
   it('signs in with a CSRF-protected request', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response(null, 401))

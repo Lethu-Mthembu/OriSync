@@ -10,6 +10,7 @@ public sealed class Orientation
     public TimeOnly AttendanceOpensAt { get; set; }
     public TimeOnly AttendanceClosesAt { get; set; }
     public string TimeZoneId { get; set; } = "Africa/Johannesburg";
+    public bool IsActive { get; set; }
     public DateTimeOffset RetentionDueAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? PurgedAt { get; set; }

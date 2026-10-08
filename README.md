@@ -23,6 +23,11 @@ Feature 3 adds admin and mentor authentication with secure host-only cookies,
 CSRF protection, single active sessions, inactivity and absolute expiry,
 password changes, email-OTP mentor recovery and one-time admin recovery.
 
+Feature 4 adds the admin orientation settings workspace: annual weekday
+calendars, editable attendance hours, explicit activation and colour-group
+lifecycle management. Only one orientation can be active, and used groups are
+protected from destructive deletion or renaming.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -119,4 +124,6 @@ See [the implementation plan](docs/implementation-plan.md) for the feature
 sequence and branch policy. See [the database schema](docs/database-schema.md)
 for table responsibilities, enforced constraints and migration instructions.
 See [authentication and sessions](docs/authentication.md) for the API contract,
-session rules, accepted reset risk and one-time admin bootstrap procedure.
+session rules, accepted reset risk and one-time admin bootstrap procedure. See
+[orientation and group management](docs/orientation-groups.md) for the Feature 4
+rules and administrative API.

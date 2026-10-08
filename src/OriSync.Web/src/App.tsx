@@ -9,6 +9,7 @@ import {
 import { postJson } from './auth/api'
 import type { AuthView, Session } from './auth/types'
 import { useSessionActivity } from './auth/useSessionActivity'
+import { OrientationSettings } from './orientation/OrientationSettings'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -125,6 +126,19 @@ function SignedInPanel({
   onChangePassword: () => void
   onLogout: () => void
 }) {
+  if (session.role === 'Admin') {
+    return (
+      <>
+        <div className="account-toolbar">
+          <span>{session.firstName} {session.surname}</span>
+          <button className="secondary-button" type="button" onClick={onChangePassword}>Change password</button>
+          <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
+        </div>
+        <OrientationSettings />
+      </>
+    )
+  }
+
   return (
     <main className="signed-in-panel">
       <p className="eyebrow">{session.role} account</p>

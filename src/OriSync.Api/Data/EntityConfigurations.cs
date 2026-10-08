@@ -15,6 +15,9 @@ internal sealed class OrientationConfiguration : IEntityTypeConfiguration<Orient
             table.HasCheckConstraint(
                 "ck_orientations_hours",
                 "attendance_opens_at < attendance_closes_at");
+            table.HasCheckConstraint(
+                "ck_orientations_dates_match_year",
+                "EXTRACT(YEAR FROM start_date) = year AND EXTRACT(YEAR FROM end_date) = year");
             table.HasCheckConstraint("ck_orientations_name", "btrim(name) <> ''");
             table.HasCheckConstraint("ck_orientations_timezone", "btrim(time_zone_id) <> ''");
             table.HasCheckConstraint(
@@ -31,7 +34,12 @@ internal sealed class OrientationConfiguration : IEntityTypeConfiguration<Orient
         builder.Property(x => x.AttendanceOpensAt).HasColumnType("time without time zone");
         builder.Property(x => x.AttendanceClosesAt).HasColumnType("time without time zone");
         builder.Property(x => x.TimeZoneId).HasColumnType("text").HasDefaultValue("Africa/Johannesburg");
+        builder.Property(x => x.IsActive).HasDefaultValue(false);
         builder.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.HasIndex(x => x.IsActive)
+            .IsUnique()
+            .HasFilter("is_active")
+            .HasDatabaseName("ux_orientations_single_active");
         builder.HasIndex(x => x.RetentionDueAt).HasFilter("purged_at IS NULL");
     }
 }
@@ -43,9 +51,13 @@ internal sealed class OrientationGroupConfiguration : IEntityTypeConfiguration<O
         builder.ToTable("groups", table =>
         {
             table.HasCheckConstraint("ck_groups_name", "btrim(name) <> ''");
+            table.HasCheckConstraint("ck_groups_uppercase_name", "name = upper(btrim(name))");
             table.HasCheckConstraint(
                 "ck_groups_normalized_name",
                 "normalized_name = lower(btrim(name))");
+            table.HasCheckConstraint(
+                "ck_groups_badge_color",
+                "badge_color ~ '^#[0-9A-F]{6}$'");
         });
 
         builder.HasKey(x => x.Id);
@@ -53,6 +65,11 @@ internal sealed class OrientationGroupConfiguration : IEntityTypeConfiguration<O
         builder.HasAlternateKey(x => new { x.Id, x.OrientationId });
         builder.Property(x => x.Name).HasColumnType("text").IsRequired();
         builder.Property(x => x.NormalizedName).HasColumnType("text").IsRequired();
+        builder.Property(x => x.BadgeColor)
+            .HasColumnType("text")
+            .HasDefaultValue("#64748B")
+            .IsRequired();
+        builder.Property(x => x.IsActive).HasDefaultValue(true);
         builder.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
         builder.HasIndex(x => new { x.OrientationId, x.NormalizedName }).IsUnique();
         builder.HasOne(x => x.Orientation)
