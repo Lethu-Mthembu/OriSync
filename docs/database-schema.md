@@ -28,7 +28,15 @@ history; generated register PDFs are never stored in the database.
   White, African, Coloured, Indian or Other.
 - Normalized email addresses are unique across student, personal and login
   email types.
-- Group names are case-insensitively unique inside an orientation.
+- Only one orientation may be active at a time. Activation is explicit and an
+  orientation must have at least one active group before it can be activated.
+- Orientation dates must fall in the selected year. The operating calendar
+  includes weekdays only; it deliberately does not exclude public holidays.
+- Group names are stored in uppercase and are case-insensitively unique inside
+  an orientation. Badge colours use six-digit hexadecimal values.
+- An unused group may be deleted. Once a mentor, student enrollment or
+  attendance row references it, its name is locked and it can only be
+  deactivated. A referenced group's badge colour remains editable.
 - A student has at most one enrollment in an orientation.
 - Current and pending student groups must belong to the enrollment's
   orientation.
@@ -42,6 +50,12 @@ Some cross-table rules cannot be expressed as ordinary PostgreSQL constraints.
 The application services implemented in later features must still verify that
 an account's role matches its person type, that student email types are present,
 and that attendance dates fall inside the configured weekday calendar.
+
+The orientation-management service additionally prevents deactivating a group
+while an active mentor or current/pending student assignment still points to it.
+After attendance exists, the orientation year, start date and opening time are
+locked. Future end dates and the closing time remain correctable while the
+orientation has not ended; historical dates cannot be rewritten.
 
 ## Neon boundary
 

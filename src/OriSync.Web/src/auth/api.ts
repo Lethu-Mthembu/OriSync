@@ -28,9 +28,18 @@ export async function postJson(
   body?: unknown,
   retryInvalidCsrf = true,
 ): Promise<Response> {
+  return sendJson(path, 'POST', body, retryInvalidCsrf)
+}
+
+export async function sendJson(
+  path: string,
+  method: 'POST' | 'PUT' | 'DELETE',
+  body?: unknown,
+  retryInvalidCsrf = true,
+): Promise<Response> {
   const token = await getCsrfToken()
   const response = await fetch(path, {
-    method: 'POST',
+    method,
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
@@ -43,7 +52,7 @@ export async function postJson(
     const problem = (await response.clone().json()) as ProblemDetails
     if (problem.title === 'Invalid CSRF token.') {
       csrfToken = null
-      if (retryInvalidCsrf) return postJson(path, body, false)
+      if (retryInvalidCsrf) return sendJson(path, method, body, false)
     }
   }
 
