@@ -21,6 +21,12 @@ cookie is also host-only, secure, HttpOnly and strict same-site. Cross-origin
 API access is not enabled; the React application and API must remain on the
 same origin.
 
+ASP.NET Core Data Protection keys are stored in PostgreSQL under the fixed
+application name `OriSync`. Antiforgery tokens therefore survive Render restarts,
+idle spin-downs and deployments instead of depending on the container's
+ephemeral filesystem. Render's edge proxy is trusted for one forwarded protocol
+hop only; forwarded client IP addresses are ignored.
+
 ## Session rules
 
 - A successful login revokes the account's previous active session.
@@ -93,8 +99,9 @@ once.
 ## Database migration
 
 `AddAuthenticationRecovery` adds the optional admin recovery-code hash and its
-issue time to `accounts`. Apply migrations before enabling the authentication
-UI against an existing database:
+issue time to `accounts`. `PersistDataProtectionKeys` adds the shared Data
+Protection key ring. Apply migrations before enabling the authentication UI
+against an existing database:
 
 ```powershell
 dotnet ef database update --project src/OriSync.Api --startup-project src/OriSync.Api
