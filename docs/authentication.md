@@ -80,6 +80,7 @@ Production requires these server-side settings:
 ```text
 PasswordReset__CodeSecret=<Base64 encoding of at least 32 random bytes>
 Resend__ApiKey=<Resend API key>
+Resend__FromEmail=OriSync-No-reply@trainmate.nemasites.com
 ```
 
 OriSync uses six-digit reset codes. The API key must remain a Render secret. The
@@ -125,8 +126,16 @@ once.
 issue time to `accounts`. `PersistDataProtectionKeys` adds the shared Data
 Protection key ring. `AddMentorPasswordResetOtps` adds the hashed, expiring OTP
 records. `AddPasswordResetEmailOutbox` adds durable delivery and changes OTP
-expiry to start after successful delivery. Apply migrations before enabling the
-authentication UI against an existing database:
+expiry to start after successful delivery.
+
+The single-instance Render development service sets
+`DatabaseMigrations__ApplyOnStartup=true`. The application applies pending EF
+Core migrations before starting HTTP traffic or the email worker. This is
+acceptable only while Render runs one instance. If the service is scaled out,
+migrations must move to one deployment job to prevent multiple instances from
+competing during startup.
+
+For local or manual migration execution, run:
 
 ```powershell
 dotnet ef database update --project src/OriSync.Api --startup-project src/OriSync.Api

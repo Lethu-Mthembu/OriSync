@@ -19,7 +19,7 @@ public sealed class ResendOptions
     public const string SectionName = "Resend";
 
     public string? ApiKey { get; set; }
-    public string? FromAddress { get; set; }
+    public string? FromEmail { get; set; }
 }
 
 public sealed partial class ResendPasswordResetEmailSender(
@@ -36,7 +36,7 @@ public sealed partial class ResendPasswordResetEmailSender(
     {
         var settings = options.Value;
         if (string.IsNullOrWhiteSpace(settings.ApiKey) ||
-            string.IsNullOrWhiteSpace(settings.FromAddress))
+            string.IsNullOrWhiteSpace(settings.FromEmail))
         {
             LogNotConfigured(logger);
             return false;
@@ -47,7 +47,7 @@ public sealed partial class ResendPasswordResetEmailSender(
         request.Headers.Add("Idempotency-Key", idempotencyKey);
         request.Content = JsonContent.Create(new
         {
-            from = settings.FromAddress,
+            from = settings.FromEmail,
             to = new[] { recipient },
             subject = "Your OriSync password reset code",
             text = $"Hello {firstName},\n\nYour OriSync password reset code is {code}. " +

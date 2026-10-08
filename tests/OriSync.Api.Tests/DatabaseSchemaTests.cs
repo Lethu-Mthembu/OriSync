@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OriSync.Api.Data;
@@ -151,6 +153,37 @@ public sealed class DatabaseSchemaTests : IAsyncLifetime
                 ({mentorId}, 'Login', 'JANE.DOE@GMAIL.COM', 'jane.doe@gmail.com');
             """,
             PostgresErrorCodes.UniqueViolation);
+    }
+
+    [Fact]
+    public async Task StartupMigrationCreatesTheSchemaBeforeReadinessIsServed()
+    {
+        await using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("ConnectionStrings:OriSync", _postgres.GetConnectionString());
+                builder.UseSetting("DatabaseMigrations:ApplyOnStartup", "true");
+                builder.UseSetting("PasswordReset:DispatcherEnabled", "false");
+            });
+
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/health/ready");
+        response.EnsureSuccessStatusCode();
+
+        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT count(*)
+            FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename <> '__EFMigrationsHistory';
+            """,
+            connection);
+
+        Assert.Equal(
+            (long)ExpectedTables.Length,
+            (long)(await command.ExecuteScalarAsync())!);
     }
 
     private OriSyncDbContext CreateDbContext()

@@ -56,8 +56,8 @@ if (!builder.Environment.IsDevelopment())
     resendOptions
         .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "Resend:ApiKey is required.")
         .Validate(
-            options => options.FromAddress == "OriSync-No-reply@trainmate.nemasites.com",
-            "Resend:FromAddress must match the confirmed sender.")
+            options => options.FromEmail == "OriSync-No-reply@trainmate.nemasites.com",
+            "Resend:FromEmail must match the confirmed sender.")
         .ValidateOnStart();
 }
 builder.Services.AddHttpClient<IPasswordResetEmailSender, ResendPasswordResetEmailSender>(client =>
@@ -99,6 +99,17 @@ builder.Services.AddDataProtection()
     .PersistKeysToDbContext<OriSyncDbContext>();
 
 var app = builder.Build();
+
+// Render runs one free web-service instance for OriSync. Applying migrations
+// before the host starts prevents the HTTP and outbox paths from observing a
+// partially upgraded schema. This must be replaced by a single deployment job
+// before the service is ever scaled to multiple instances.
+if (app.Configuration.GetValue<bool>("DatabaseMigrations:ApplyOnStartup"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 {
