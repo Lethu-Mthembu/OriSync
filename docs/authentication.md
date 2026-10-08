@@ -128,12 +128,15 @@ Protection key ring. `AddMentorPasswordResetOtps` adds the hashed, expiring OTP
 records. `AddPasswordResetEmailOutbox` adds durable delivery and changes OTP
 expiry to start after successful delivery.
 
-The single-instance Render development service sets
-`DatabaseMigrations__ApplyOnStartup=true`. The application applies pending EF
-Core migrations before starting HTTP traffic or the email worker. This is
-acceptable only while Render runs one instance. If the service is scaled out,
-migrations must move to one deployment job to prevent multiple instances from
-competing during startup.
+The single-instance Render development service runs in the `Staging`
+environment, whose checked-in configuration enables startup migrations. The
+Blueprint also sets `DatabaseMigrations__ApplyOnStartup=true` for newly created
+services. The application applies pending EF Core migrations before starting
+HTTP traffic or the email worker. This is acceptable only while Render runs one
+instance. If the service is scaled out, migrations must move to one deployment
+job to prevent multiple instances from competing during startup. Readiness also
+fails while migrations remain pending, so Render cannot report an incompatible
+database schema as healthy.
 
 For local or manual migration execution, run:
 
