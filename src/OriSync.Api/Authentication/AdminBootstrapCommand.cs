@@ -25,7 +25,7 @@ public static class AdminBootstrapCommand
 
         if (string.IsNullOrWhiteSpace(email) ||
             !System.Net.Mail.MailAddress.TryCreate(email, out _) ||
-            !PasswordRules.IsValid(password) ||
+            !PasswordRules.IsValidTemporary(password) ||
             string.IsNullOrWhiteSpace(firstName) ||
             string.IsNullOrWhiteSpace(surname))
         {
@@ -66,7 +66,7 @@ public static class AdminBootstrapCommand
             Person = person,
             Role = AccountRole.Admin,
             IsActive = true,
-            MustChangePassword = false,
+            MustChangePassword = true,
             CreatedAt = now,
             PasswordChangedAt = now,
             RecoveryCodeHash = CredentialSecrets.Hash(recoveryCode),

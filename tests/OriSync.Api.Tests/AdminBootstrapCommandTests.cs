@@ -56,6 +56,7 @@ public sealed class AdminBootstrapCommandTests : IAsyncLifetime
                 .SingleAsync(account => account.Role == AccountRole.Admin);
             Assert.Equal("admin@orisync.test", admin.Person.Emails.Single().NormalizedEmail);
             Assert.NotNull(admin.RecoveryCodeHash);
+            Assert.True(admin.MustChangePassword);
             Assert.DoesNotContain("bootstrap-password", admin.PasswordHash, StringComparison.Ordinal);
         }
 

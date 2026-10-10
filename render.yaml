@@ -14,3 +14,5 @@ services:
         value: Staging
       - key: DatabaseMigrations__ApplyOnStartup
         value: "true"
+      - key: MentorInvitations__PublicBaseUrl
+        value: https://orisync-dev.onrender.com

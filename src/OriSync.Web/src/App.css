@@ -104,7 +104,8 @@ h2 {
   font-weight: 700;
 }
 
-.field input {
+.field input,
+.field select {
   width: 100%;
   min-height: 2.9rem;
   box-sizing: border-box;
@@ -115,9 +116,167 @@ h2 {
   background: #fff;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: #005596;
   outline: 3px solid rgb(0 85 150 / 15%);
+}
+
+.admin-navigation {
+  display: flex;
+  gap: 0.35rem;
+  width: min(76rem, calc(100% - 2rem));
+  margin: 1rem auto 0;
+  border-bottom: 1px solid #cbd8df;
+}
+
+.admin-navigation button {
+  border: 0;
+  border-bottom: 0.22rem solid transparent;
+  padding: 0.85rem 1rem;
+  color: #466170;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.admin-navigation button.active {
+  border-color: #c7272d;
+  color: #18364d;
+}
+
+.activation-layout {
+  display: grid;
+  width: min(34rem, calc(100% - 2rem));
+  min-height: calc(100vh - 4rem);
+  margin: 0 auto;
+  padding-block: 2rem;
+  place-items: center;
+}
+
+.activation-card h1,
+.activation-layout h1 {
+  font-size: clamp(2rem, 7vw, 3rem);
+}
+
+.activation-group {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #26485b;
+  font-weight: 800;
+}
+
+.primary-link {
+  display: inline-flex;
+  min-height: 2.8rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  padding-inline: 1rem;
+  color: #fff;
+  background: #005596;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.invite-form {
+  display: grid;
+  grid-template-columns: minmax(15rem, 1.5fr) minmax(14rem, 1fr) minmax(10rem, 0.7fr) auto;
+  align-items: end;
+  gap: 1rem;
+}
+
+.directory-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.directory-filters {
+  display: grid;
+  grid-template-columns: minmax(14rem, 2fr) repeat(3, minmax(8rem, 1fr));
+  gap: 0.75rem;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.directory-table {
+  width: 100%;
+  min-width: 60rem;
+  border-collapse: collapse;
+}
+
+.directory-table th,
+.directory-table td {
+  border-bottom: 1px solid #dce4e8;
+  padding: 0.8rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.directory-table th {
+  color: #486472;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.directory-table td small,
+.directory-table td strong {
+  display: block;
+}
+
+.directory-table td small {
+  margin-top: 0.3rem;
+  color: #607985;
+}
+
+.directory-table td select {
+  display: block;
+  max-width: 9rem;
+  margin-top: 0.45rem;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.mentor-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(9rem, 1fr));
+  align-items: end;
+  gap: 0.75rem;
+  padding-block: 0.5rem;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.status-delivery-failed,
+.status-expired,
+.status-cancelled,
+.status-disabled {
+  color: #852126;
+  background: #fff0f1;
+}
+
+.status-invited,
+.status-pending-delivery {
+  color: #695000;
+  background: #fff7d6;
 }
 
 .primary-button,
@@ -510,6 +669,12 @@ h2 {
   .group-row > input {
     grid-column: 1 / -1;
   }
+
+  .invite-form,
+  .directory-filters,
+  .mentor-edit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 30rem) {
@@ -547,5 +712,19 @@ h2 {
 
   .field-wide {
     grid-column: auto;
+  }
+
+  .admin-navigation,
+  .invite-form,
+  .directory-filters,
+  .mentor-edit-grid,
+  .pagination {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-navigation,
+  .pagination {
+    flex-direction: column;
   }
 }
