@@ -323,6 +323,11 @@ public sealed partial class OrientationManagementService(
                 .Select(item => item.GroupId)
                 .Distinct()
                 .ToListAsync(cancellationToken));
+            referencedGroupIds.UnionWith(await dbContext.MentorInvitations
+                .Where(item => groupIds.Contains(item.GroupId))
+                .Select(item => item.GroupId)
+                .Distinct()
+                .ToListAsync(cancellationToken));
         }
 
         return orientations.Select(orientation => new OrientationResponse(
@@ -371,7 +376,8 @@ public sealed partial class OrientationManagementService(
         await dbContext.StudentEnrollments.AnyAsync(
             item => item.CurrentGroupId == groupId || item.PendingGroupId == groupId,
             cancellationToken) ||
-        await dbContext.AttendanceRecords.AnyAsync(item => item.GroupId == groupId, cancellationToken);
+        await dbContext.AttendanceRecords.AnyAsync(item => item.GroupId == groupId, cancellationToken) ||
+        await dbContext.MentorInvitations.AnyAsync(item => item.GroupId == groupId, cancellationToken);
 
     private async Task SaveChangesAsync(string conflictDetail, CancellationToken cancellationToken)
     {

@@ -408,3 +408,61 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
             .OnDelete(DeleteBehavior.SetNull);
     }
 }
+
+internal sealed class MentorInvitationConfiguration : IEntityTypeConfiguration<MentorInvitation>
+{
+    public void Configure(EntityTypeBuilder<MentorInvitation> builder)
+    {
+        builder.ToTable("mentor_invitations", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_mentor_invitations_email",
+                "position('@' in email) > 1 AND normalized_email = lower(btrim(email))");
+            table.HasCheckConstraint(
+                "ck_mentor_invitations_token",
+                "btrim(token_hash) <> ''");
+            table.HasCheckConstraint(
+                "ck_mentor_invitations_delivery_times",
+                "available_at >= created_at AND delivery_discard_after > created_at " +
+                "AND (sent_at IS NULL OR sent_at >= created_at) " +
+                "AND (expires_at IS NULL OR (sent_at IS NOT NULL AND expires_at > sent_at))");
+            table.HasCheckConstraint(
+                "ck_mentor_invitations_terminal_times",
+                "(accepted_at IS NULL OR accepted_at >= created_at) " +
+                "AND (cancelled_at IS NULL OR cancelled_at >= created_at) " +
+                "AND (delivery_failed_at IS NULL OR delivery_failed_at >= created_at) " +
+                "AND (purge_after IS NULL OR purge_after > created_at)");
+            table.HasCheckConstraint(
+                "ck_mentor_invitations_single_terminal_state",
+                "accepted_at IS NULL OR cancelled_at IS NULL");
+            table.HasCheckConstraint(
+                "ck_mentor_invitations_attempts",
+                "attempt_count BETWEEN 0 AND 20");
+            table.HasCheckConstraint(
+                "ck_mentor_invitations_delivery_version",
+                "delivery_version > 0");
+        });
+
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).UseIdentityByDefaultColumn();
+        builder.Property(x => x.Email).HasColumnType("text").IsRequired();
+        builder.Property(x => x.NormalizedEmail).HasColumnType("text").IsRequired();
+        builder.Property(x => x.TokenHash).HasColumnType("text").IsRequired();
+        builder.Property(x => x.ProtectedToken).HasColumnType("text");
+        builder.Property(x => x.DeliveryVersion).HasDefaultValue(1);
+        builder.HasIndex(x => x.NormalizedEmail)
+            .IsUnique()
+            .HasFilter("accepted_at IS NULL AND cancelled_at IS NULL")
+            .HasDatabaseName("ux_mentor_invitations_open_email");
+        builder.HasIndex(x => new { x.AvailableAt, x.Id })
+            .HasFilter("sent_at IS NULL AND cancelled_at IS NULL AND accepted_at IS NULL")
+            .HasDatabaseName("ix_mentor_invitations_delivery");
+        builder.HasIndex(x => x.PurgeAfter)
+            .HasFilter("purge_after IS NOT NULL")
+            .HasDatabaseName("ix_mentor_invitations_purge");
+        builder.HasOne(x => x.Group)
+            .WithMany()
+            .HasForeignKey(x => x.GroupId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}

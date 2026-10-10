@@ -37,6 +37,9 @@ hop only; forwarded client IP addresses are ignored.
   interaction and at most once per minute.
 - Password changes, password resets, account disabling and later mentor-group
   moves revoke active sessions.
+- Permanent passwords require at least eight characters, one uppercase letter,
+  one lowercase letter and one special character. A bootstrap password is a
+  temporary exception and forces the administrator to replace it at first login.
 - Accounts with a temporary password are blocked from operational API routes
   until the password is changed.
 

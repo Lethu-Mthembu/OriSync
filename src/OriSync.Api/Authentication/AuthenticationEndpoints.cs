@@ -274,7 +274,7 @@ public static partial class AuthenticationEndpoints
     private static IResult PasswordValidationProblem() => Results.Problem(
         statusCode: StatusCodes.Status400BadRequest,
         title: "Invalid password.",
-        detail: "Passwords must contain at least eight characters.");
+        detail: PasswordRules.Requirements);
 
     private static IResult InvalidAdminRecovery() => Results.Problem(
         statusCode: StatusCodes.Status400BadRequest,

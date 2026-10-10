@@ -176,7 +176,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
                 "223450002",
                 "reset@orisync.test",
                 _emailSender.LastCode!,
-                "replacement-password"))
+                "Replacement!Password"))
         };
         resetRequest.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
         var reset = await resetClient.SendAsync(resetRequest);
@@ -190,7 +190,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             (await LoginAsync(resetClient, "reset@orisync.test", OriginalPassword)).StatusCode);
         Assert.Equal(
             HttpStatusCode.OK,
-            (await LoginAsync(resetClient, "reset@orisync.test", "replacement-password")).StatusCode);
+            (await LoginAsync(resetClient, "reset@orisync.test", "Replacement!Password")).StatusCode);
     }
 
     [Fact]
@@ -367,7 +367,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             "223450006",
             "otp-expiry@orisync.test",
             _emailSender.LastCode!,
-            "replacement-password");
+            "Replacement!Password");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -394,7 +394,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
                 "223450007",
                 "attempts@orisync.test",
                 invalidCode,
-                "replacement-password");
+                "Replacement!Password");
             Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
         }
 
@@ -404,7 +404,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             "223450007",
             "attempts@orisync.test",
             validCode,
-            "replacement-password");
+            "Replacement!Password");
         Assert.Equal(HttpStatusCode.BadRequest, locked.StatusCode);
     }
 
@@ -420,7 +420,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         using var changeRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/change-password")
         {
             Content = JsonContent.Create(
-                new ChangePasswordRequest(OriginalPassword, "changed-password"))
+                new ChangePasswordRequest(OriginalPassword, "Changed!Password"))
         };
         changeRequest.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
         var changed = await client.SendAsync(changeRequest);
@@ -431,7 +431,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             (await client.GetAsync("/api/auth/session")).StatusCode);
         Assert.Equal(
             HttpStatusCode.OK,
-            (await LoginAsync(client, "change@orisync.test", "changed-password")).StatusCode);
+            (await LoginAsync(client, "change@orisync.test", "Changed!Password")).StatusCode);
     }
 
     [Fact]
@@ -470,7 +470,7 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
             Content = JsonContent.Create(new RecoverAdminRequest(
                 "admin@orisync.test",
                 AdminRecoveryCode,
-                "recovered-password"))
+                "Recovered!Password"))
         };
         recoveryRequest.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
 
@@ -481,14 +481,14 @@ public sealed class AuthenticationEndpointsTests : IAsyncLifetime
         Assert.NotEqual(AdminRecoveryCode, payload.RecoveryCode);
         Assert.Equal(
             HttpStatusCode.OK,
-            (await LoginAsync(client, "admin@orisync.test", "recovered-password")).StatusCode);
+            (await LoginAsync(client, "admin@orisync.test", "Recovered!Password")).StatusCode);
 
         using var reusedCodeRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/recover-admin")
         {
             Content = JsonContent.Create(new RecoverAdminRequest(
                 "admin@orisync.test",
                 AdminRecoveryCode,
-                "another-password"))
+                "Another!Password"))
         };
         reusedCodeRequest.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf);
         Assert.Equal(

@@ -1,6 +1,6 @@
 # Database schema
 
-OriSync uses twelve PostgreSQL tables. Entity Framework Core owns the migration
+OriSync uses thirteen PostgreSQL tables. Entity Framework Core owns the migration
 history; generated register PDFs are never stored in the database.
 
 | Table | Responsibility |
@@ -10,6 +10,7 @@ history; generated register PDFs are never stored in the database.
 | `people` | Shared admin, mentor and student identity, including the student demographic fields |
 | `person_emails` | Student, personal and login email addresses with database-wide uniqueness |
 | `accounts` | Admin and mentor credentials, status and the mentor's current group |
+| `mentor_invitations` | Durable single-use mentor activation tokens, delivery attempts and retention state |
 | `student_enrollments` | A student's orientation membership, current or pending group and current QR version |
 | `attendance_records` | One attendance row per enrolled student and date, with a historical group snapshot |
 | `sessions` | Hashed server sessions, activity and revocation state |

@@ -35,6 +35,9 @@ not a settings-page edit.
 - Unused groups may be renamed or deleted.
 - Once referenced by a mentor, student enrollment or attendance row, the name
   is immutable and deletion is rejected. The badge colour remains editable.
+- Pending or retained mentor invitations also prevent deletion or renaming.
+  A group may still be deactivated; its invitation cannot be accepted until an
+  administrator reassigns it to another active group.
 - A group cannot be deactivated while an active mentor or current/pending
   student assignment points to it. Those assignments must be moved or removed
   first.

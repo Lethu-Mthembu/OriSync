@@ -9,6 +9,7 @@ using OriSync.Api.Authentication;
 using OriSync.Api.Data;
 using OriSync.Api.Domain;
 using OriSync.Api.Health;
+using OriSync.Api.MentorManagement;
 using OriSync.Api.OrientationManagement;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,11 +43,16 @@ builder.Services.AddScoped<OriSync.Api.Authentication.AuthenticationService>();
 builder.Services.AddSingleton<IPasswordResetCodeGenerator, PasswordResetCodeGenerator>();
 builder.Services.AddScoped<PasswordResetEmailOutboxProcessor>();
 builder.Services.AddScoped<OrientationManagementService>();
+builder.Services.AddScoped<MentorManagementService>();
+builder.Services.AddScoped<MentorInvitationEmailProcessor>();
 builder.Services.AddHostedService<PasswordResetEmailOutboxWorker>();
+builder.Services.AddHostedService<MentorInvitationEmailWorker>();
 var passwordResetOptions = builder.Services.AddOptions<PasswordResetOptions>()
     .Bind(builder.Configuration.GetSection(PasswordResetOptions.SectionName));
 var resendOptions = builder.Services.AddOptions<ResendOptions>()
     .Bind(builder.Configuration.GetSection(ResendOptions.SectionName));
+var mentorInvitationOptions = builder.Services.AddOptions<MentorInvitationOptions>()
+    .Bind(builder.Configuration.GetSection(MentorInvitationOptions.SectionName));
 if (!builder.Environment.IsDevelopment())
 {
     passwordResetOptions
@@ -61,8 +67,19 @@ if (!builder.Environment.IsDevelopment())
             options => options.FromEmail == "OriSync-No-reply@trainmate.nemasites.com",
             "Resend:FromEmail must match the confirmed sender.")
         .ValidateOnStart();
+    mentorInvitationOptions
+        .Validate(
+            options => Uri.TryCreate(options.PublicBaseUrl, UriKind.Absolute, out var uri) &&
+                uri.Scheme == Uri.UriSchemeHttps,
+            "MentorInvitations:PublicBaseUrl must be an absolute HTTPS URL.")
+        .ValidateOnStart();
 }
 builder.Services.AddHttpClient<IPasswordResetEmailSender, ResendPasswordResetEmailSender>(client =>
+{
+    client.BaseAddress = new Uri("https://api.resend.com/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient<IMentorInvitationEmailSender, ResendMentorInvitationEmailSender>(client =>
 {
     client.BaseAddress = new Uri("https://api.resend.com/");
     client.Timeout = TimeSpan.FromSeconds(10);
@@ -192,6 +209,7 @@ app.MapGet("/api/status", (IHostEnvironment environment) => Results.Ok(new
 
 app.MapAuthenticationEndpoints();
 app.MapOrientationManagementEndpoints();
+app.MapMentorManagementEndpoints();
 
 app.MapFallbackToFile("index.html");
 

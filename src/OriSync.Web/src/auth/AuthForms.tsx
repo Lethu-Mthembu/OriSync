@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import { getError, postJson } from './api'
 import type { AuthView, Session } from './types'
 
+const passwordPattern = '(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}'
+
 export function LoginForm({
   onSignedIn,
   onView,
@@ -142,8 +144,9 @@ export function MentorResetForm({ onView }: { onView: (view: AuthView) => void }
       {codeRequested && (
         <>
           <Field label="Reset code" value={code} onChange={setCode} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maximumLength={6} />
-          <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} />
-          <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} />
+          <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
+          <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
+          <p className="form-note">Use at least 8 characters with an uppercase letter, lowercase letter and special character.</p>
         </>
       )}
       <ErrorMessage message={error} />
@@ -212,7 +215,8 @@ export function AdminRecoveryForm({ onView }: { onView: (view: AuthView) => void
       </div>
       <Field label="Admin email" type="email" value={email} onChange={setEmail} autoComplete="username" />
       <Field label="Recovery code" value={recoveryCode} onChange={setRecoveryCode} autoComplete="off" />
-      <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} />
+      <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
+      <p className="form-note">Use at least 8 characters with an uppercase letter, lowercase letter and special character.</p>
       <ErrorMessage message={error} />
       <button className="primary-button" disabled={submitting} type="submit">
         {submitting ? 'Recovering…' : 'Recover account'}
@@ -271,8 +275,9 @@ export function ChangePasswordForm({
         <p className="form-note">Changing your password signs out every active session.</p>
       </div>
       <Field label="Current password" type="password" value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" minimumLength={8} />
-      <Field label="New password" type="password" value={newPassword} onChange={setNewPassword} autoComplete="new-password" minimumLength={8} />
-      <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} />
+      <Field label="New password" type="password" value={newPassword} onChange={setNewPassword} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
+      <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
+      <p className="form-note">Use at least 8 characters with an uppercase letter, lowercase letter and special character.</p>
       <ErrorMessage message={error} />
       <button className="primary-button" disabled={submitting} type="submit">
         {submitting ? 'Changing…' : 'Change password'}

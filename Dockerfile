@@ -25,6 +25,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
 ENV ASPNETCORE_ENVIRONMENT=Staging
+ENV PORT=10000
 EXPOSE 10000
 
 COPY --from=api-build /app/publish/ ./

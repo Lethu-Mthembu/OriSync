@@ -28,6 +28,12 @@ calendars, editable attendance hours, explicit activation and colour-group
 lifecycle management. Only one orientation can be active, and used groups are
 protected from destructive deletion or renaming.
 
+Feature 5 adds the centralized mentor directory and invitation-only onboarding.
+The administrator enters an email and active group; the mentor receives a
+single-use activation link and supplies their own identity and password.
+Administrators can reassign, edit, disable, reactivate and, after six months,
+permanently delete mentor accounts.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -66,8 +72,8 @@ terminates public HTTPS at its reverse proxy.
 
 ## Database schema
 
-The current schema contains twelve PostgreSQL tables through Entity Framework
-Core migrations: nine domain tables, password-reset OTP and email-outbox tables,
+The current schema contains thirteen PostgreSQL tables through Entity Framework
+Core migrations: ten domain tables, password-reset OTP and email-outbox tables,
 and the shared ASP.NET Core Data Protection key ring. Database identifiers use
 lowercase snake case, foreign keys are indexed and row-level security is enabled
 without client policies. OriSync accesses Neon PostgreSQL only through the
@@ -127,3 +133,5 @@ See [authentication and sessions](docs/authentication.md) for the API contract,
 session rules, accepted reset risk and one-time admin bootstrap procedure. See
 [orientation and group management](docs/orientation-groups.md) for the Feature 4
 rules and administrative API.
+See [mentor management](docs/mentor-management.md) for Feature 5 invitation,
+directory and account-lifecycle rules.

@@ -18,6 +18,7 @@ public sealed class OriSyncDbContext(DbContextOptions<OriSyncDbContext> options)
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<PasswordResetOtp> PasswordResetOtps => Set<PasswordResetOtp>();
     public DbSet<PasswordResetEmailOutbox> PasswordResetEmailOutbox => Set<PasswordResetEmailOutbox>();
+    public DbSet<MentorInvitation> MentorInvitations => Set<MentorInvitation>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

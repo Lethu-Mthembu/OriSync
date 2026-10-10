@@ -9,14 +9,22 @@ import {
 import { postJson } from './auth/api'
 import type { AuthView, Session } from './auth/types'
 import { useSessionActivity } from './auth/useSessionActivity'
+import { MentorActivation } from './mentors/MentorActivation'
+import { MentorManagement } from './mentors/MentorManagement'
 import { OrientationSettings } from './orientation/OrientationSettings'
 
 function App() {
+  const [activation] = useState(() => readActivationLink())
   const [session, setSession] = useState<Session | null>(null)
-  const [checkingSession, setCheckingSession] = useState(true)
+  const [checkingSession, setCheckingSession] = useState(() => activation === null)
   const [view, setView] = useState<AuthView>('login')
 
   useEffect(() => {
+    if (activation) {
+      window.history.replaceState(null, '', '/activate-mentor')
+      return
+    }
+
     const controller = new AbortController()
 
     async function restoreSession() {
@@ -43,7 +51,7 @@ function App() {
 
     void restoreSession()
     return () => controller.abort()
-  }, [])
+  }, [activation])
 
   const handleExpired = useCallback(() => {
     setSession(null)
@@ -61,6 +69,9 @@ function App() {
     setView(nextSession.mustChangePassword ? 'change-password' : 'login')
   }
 
+  if (activation) {
+    return <div className="app-shell"><Header /><MentorActivation invitationId={activation.invitationId} token={activation.token} /></div>
+  }
   if (checkingSession) return <LoadingScreen />
 
   return (
@@ -127,16 +138,7 @@ function SignedInPanel({
   onLogout: () => void
 }) {
   if (session.role === 'Admin') {
-    return (
-      <>
-        <div className="account-toolbar">
-          <span>{session.firstName} {session.surname}</span>
-          <button className="secondary-button" type="button" onClick={onChangePassword}>Change password</button>
-          <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
-        </div>
-        <OrientationSettings />
-      </>
-    )
+    return <AdminWorkspace session={session} onChangePassword={onChangePassword} onLogout={onLogout} />
   }
 
   return (
@@ -156,6 +158,34 @@ function SignedInPanel({
       </div>
     </main>
   )
+}
+
+function AdminWorkspace({ session, onChangePassword, onLogout }: { session: Session; onChangePassword: () => void; onLogout: () => void }) {
+  const [section, setSection] = useState<'mentors' | 'orientations'>('orientations')
+  return (
+    <>
+      <div className="account-toolbar">
+        <span>{session.firstName} {session.surname}</span>
+        <button className="secondary-button" type="button" onClick={onChangePassword}>Change password</button>
+        <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
+      </div>
+      <nav className="admin-navigation" aria-label="Admin settings">
+        <button className={section === 'mentors' ? 'active' : ''} type="button" onClick={() => setSection('mentors')}>Mentors</button>
+        <button className={section === 'orientations' ? 'active' : ''} type="button" onClick={() => setSection('orientations')}>Orientations and groups</button>
+      </nav>
+      {section === 'mentors' ? <MentorManagement /> : <OrientationSettings />}
+    </>
+  )
+}
+
+function readActivationLink() {
+  if (window.location.pathname !== '/activate-mentor') return null
+  const values = new URLSearchParams(window.location.hash.slice(1))
+  const invitationId = Number(values.get('invitation'))
+  const token = values.get('token') ?? ''
+  return Number.isSafeInteger(invitationId) && invitationId > 0 && token
+    ? { invitationId, token }
+    : null
 }
 
 export default App
