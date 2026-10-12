@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -11,6 +12,7 @@ using OriSync.Api.Domain;
 using OriSync.Api.Health;
 using OriSync.Api.MentorManagement;
 using OriSync.Api.OrientationManagement;
+using OriSync.Api.StudentManagement;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +46,7 @@ builder.Services.AddSingleton<IPasswordResetCodeGenerator, PasswordResetCodeGene
 builder.Services.AddScoped<PasswordResetEmailOutboxProcessor>();
 builder.Services.AddScoped<OrientationManagementService>();
 builder.Services.AddScoped<MentorManagementService>();
+builder.Services.AddScoped<StudentManagementService>();
 builder.Services.AddScoped<MentorInvitationEmailProcessor>();
 builder.Services.AddHostedService<PasswordResetEmailOutboxWorker>();
 builder.Services.AddHostedService<MentorInvitationEmailWorker>();
@@ -89,6 +92,11 @@ builder.Services.AddAuthentication(AuthenticationConstants.Scheme)
         AuthenticationConstants.Scheme,
         _ => { });
 builder.Services.AddAuthorization();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    // Public API contracts use stable enum names rather than storage ordinals.
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 builder.Services.AddAntiforgery(options =>
 {
     options.Cookie.Name = AuthenticationConstants.AntiforgeryCookieName;
@@ -210,6 +218,7 @@ app.MapGet("/api/status", (IHostEnvironment environment) => Results.Ok(new
 app.MapAuthenticationEndpoints();
 app.MapOrientationManagementEndpoints();
 app.MapMentorManagementEndpoints();
+app.MapStudentManagementEndpoints();
 
 app.MapFallbackToFile("index.html");
 

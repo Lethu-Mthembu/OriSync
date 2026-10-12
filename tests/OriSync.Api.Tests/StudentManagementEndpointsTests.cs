@@ -1,0 +1,389 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using OriSync.Api.Authentication;
+using OriSync.Api.Data;
+using OriSync.Api.Domain;
+using OriSync.Api.StudentManagement;
+using Testcontainers.PostgreSql;
+
+namespace OriSync.Api.Tests;
+
+public sealed class StudentManagementEndpointsTests : IAsyncLifetime
+{
+    private const string Password = "Secure!Password";
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
+        .WithDatabase("orisync_student_management_tests")
+        .WithUsername("postgres")
+        .WithPassword("postgres")
+        .Build();
+    private readonly MutableTimeProvider _time = new(
+        new DateTimeOffset(2027, 2, 1, 6, 0, 0, TimeSpan.Zero));
+    private WebApplicationFactory<Program>? _factory;
+    private long _redGroupId;
+    private long _blueGroupId;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    public async Task InitializeAsync()
+    {
+        await _postgres.StartAsync();
+        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("ConnectionStrings:OriSync", _postgres.GetConnectionString());
+            builder.UseSetting("PasswordReset:DispatcherEnabled", "false");
+            builder.UseSetting("MentorInvitations:DispatcherEnabled", "false");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(_time);
+            });
+        });
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+        await dbContext.Database.MigrateAsync();
+        (_redGroupId, _blueGroupId) = await SeedOrientationAndMentorsAsync(dbContext);
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_factory is not null)
+        {
+            await _factory.DisposeAsync();
+        }
+
+        await _postgres.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task RegistrationCreatesPresentStudentAndNormalizesUnicodeNames()
+    {
+        using var mentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var response = await SendJsonAsync(
+            mentor,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "  Élodie   Anne-Marie  ", "O’Connor"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions);
+        Assert.NotNull(created);
+        Assert.Equal("RegisteredPresent", created.Outcome);
+        Assert.Equal("Élodie Anne-Marie", created.Student.FullNames);
+        Assert.Equal("ÉA", created.Student.Initials);
+        Assert.Equal("Present", created.Student.AttendanceStatus);
+        Assert.Equal("RED", created.Student.GroupName);
+
+        await using var scope = _factory!.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+        var enrollment = await dbContext.StudentEnrollments
+            .Include(item => item.AttendanceRecords)
+            .Include(item => item.Student)
+            .SingleAsync();
+        Assert.Equal("ÉA", enrollment.Student.Initials);
+        Assert.Equal(AttendanceStatus.Present, Assert.Single(enrollment.AttendanceRecords).Status);
+        Assert.Contains(await dbContext.AuditEvents.ToListAsync(), item =>
+            item.EventType == "StudentCreated" &&
+            item.EntityId == enrollment.Id &&
+            item.ExpiresAt == item.OccurredAt.AddDays(14));
+    }
+
+    [Fact]
+    public async Task RegistrationRejectsInvalidNamesAndClosedHours()
+    {
+        using var mentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var invalid = await SendJsonAsync(
+            mentor,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane3", "Doe"));
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        _time.SetUtcNow(new DateTimeOffset(2027, 2, 1, 13, 31, 0, TimeSpan.Zero));
+        using var closedHoursMentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var closed = await SendJsonAsync(
+            closedHoursMentor,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane", "Doe"));
+        Assert.Equal(HttpStatusCode.Conflict, closed.StatusCode);
+    }
+
+    [Fact]
+    public async Task RemovalThenDifferentGroupOnboardingPreservesTodayAndMovesTomorrow()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var createdResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane Mary", "Doe"));
+        var created = (await createdResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await SendJsonAsync(
+                red,
+                HttpMethod.Post,
+                $"/api/mentor/students/{created.Student.EnrollmentId}/remove")).StatusCode);
+
+        using var blue = await CreateMentorClientAsync("blue.mentor@orisync.test");
+        var movedResponse = await SendJsonAsync(
+            blue,
+            HttpMethod.Post,
+            "/api/mentor/students/onboard",
+            new OnboardExistingStudentRequest("223456789"));
+        movedResponse.EnsureSuccessStatusCode();
+        var moved = (await movedResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        Assert.Equal("MovesTomorrow", moved.Outcome);
+        Assert.Equal("BLUE", moved.Student.GroupName);
+        Assert.Equal("—", moved.Student.AttendanceStatus);
+        Assert.True(moved.Student.IsIncomingTransfer);
+
+        var blockedEdit = await SendJsonAsync(
+            blue,
+            HttpMethod.Put,
+            $"/api/mentor/students/{created.Student.EnrollmentId}",
+            Student("223456789", "Jane Mary", "Doe"));
+        Assert.Equal(HttpStatusCode.Conflict, blockedEdit.StatusCode);
+
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+            var attendance = await dbContext.AttendanceRecords.SingleAsync();
+            Assert.Equal(_redGroupId, attendance.GroupId);
+            Assert.Equal(AttendanceStatus.Present, attendance.Status);
+        }
+
+        _time.SetUtcNow(new DateTimeOffset(2027, 2, 2, 6, 0, 0, TimeSpan.Zero));
+        using var blueTomorrow = await CreateMentorClientAsync("blue.mentor@orisync.test");
+        var directory = await blueTomorrow.GetFromJsonAsync<StudentDirectoryResponse>(
+            "/api/mentor/students?page=1&pageSize=10",
+            JsonOptions);
+        var tomorrow = Assert.Single(directory!.Items);
+        Assert.Equal(_blueGroupId, tomorrow.GroupId);
+        Assert.False(tomorrow.IsIncomingTransfer);
+        Assert.Equal("Absent", tomorrow.AttendanceStatus);
+    }
+
+    [Fact]
+    public async Task SameGroupReOnboardingIsImmediateAndEditingRotatesQrVersion()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var createdResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane Mary", "Doe"));
+        var created = (await createdResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            $"/api/mentor/students/{created.Student.EnrollmentId}/remove");
+
+        var restoredResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students/onboard",
+            new OnboardExistingStudentRequest("223456789"));
+        var restored = (await restoredResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        Assert.Equal("RestoredToday", restored.Outcome);
+        Assert.Equal("Present", restored.Student.AttendanceStatus);
+
+        var updatedResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Put,
+            $"/api/mentor/students/{created.Student.EnrollmentId}",
+            Student("223456789", "Jane Marie", "Doe-Smith"));
+        var updated = (await updatedResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        Assert.Equal(2, updated.Student.QrVersion);
+        Assert.Equal("JM", updated.Student.Initials);
+        Assert.Equal("Doe-Smith", updated.Student.Surname);
+    }
+
+    [Fact]
+    public async Task AdminDirectoryIsReadOnlyAndCanFilterUnassignedStudents()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var createdResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane", "Doe"));
+        var created = (await createdResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            $"/api/mentor/students/{created.Student.EnrollmentId}/remove");
+
+        using var admin = await CreateAdminClientAsync();
+        var directory = await admin.GetFromJsonAsync<StudentDirectoryResponse>(
+            "/api/admin/students?unassigned=true&page=1&pageSize=10",
+            JsonOptions);
+        var student = Assert.Single(directory!.Items);
+        Assert.Equal("UNASSIGNED", student.GroupName);
+
+        var mutation = await SendJsonAsync(
+            admin,
+            HttpMethod.Put,
+            $"/api/mentor/students/{created.Student.EnrollmentId}",
+            Student("223456789", "Changed", "Name"));
+        Assert.Equal(HttpStatusCode.Forbidden, mutation.StatusCode);
+    }
+
+    private HttpClient CreateClient() => _factory!.CreateClient(
+        new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost"),
+            HandleCookies = true
+        });
+
+    private async Task<HttpClient> CreateMentorClientAsync(string email)
+    {
+        var client = CreateClient();
+        (await SendJsonAsync(
+            client,
+            HttpMethod.Post,
+            "/api/auth/login",
+            new LoginRequest(email, Password))).EnsureSuccessStatusCode();
+        return client;
+    }
+
+    private async Task<HttpClient> CreateAdminClientAsync()
+    {
+        var client = CreateClient();
+        (await SendJsonAsync(
+            client,
+            HttpMethod.Post,
+            "/api/auth/login",
+            new LoginRequest("admin@orisync.test", Password))).EnsureSuccessStatusCode();
+        return client;
+    }
+
+    private static SaveStudentRequest Student(
+        string number,
+        string fullNames,
+        string surname) => new(
+            number,
+            fullNames,
+            surname,
+            $"{number}@student.tut.test",
+            $"{number}@personal.test",
+            StudentAgeGroup.C2,
+            Gender.Female,
+            Ethnicity.African);
+
+    private static async Task<HttpResponseMessage> SendJsonAsync(
+        HttpClient client,
+        HttpMethod method,
+        string path,
+        object? body = null)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(method, path)
+        {
+            Content = body is null ? null : JsonContent.Create(body)
+        };
+        request.Headers.Add(AuthenticationConstants.AntiforgeryHeaderName, csrf.RequestToken);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<(long RedGroupId, long BlueGroupId)> SeedOrientationAndMentorsAsync(
+        OriSyncDbContext dbContext)
+    {
+        var now = new DateTimeOffset(2027, 2, 1, 6, 0, 0, TimeSpan.Zero);
+        var orientation = new Orientation
+        {
+            Year = 2027,
+            Name = "First Year Orientation 2027",
+            StartDate = new DateOnly(2027, 2, 1),
+            EndDate = new DateOnly(2027, 2, 12),
+            AttendanceOpensAt = new TimeOnly(7, 45),
+            AttendanceClosesAt = new TimeOnly(15, 30),
+            TimeZoneId = "Africa/Johannesburg",
+            IsActive = true,
+            RetentionDueAt = now.AddMonths(6),
+            CreatedAt = now
+        };
+        var red = NewGroup(orientation, "RED", "#C62828", now);
+        var blue = NewGroup(orientation, "BLUE", "#1565C0", now);
+        dbContext.Groups.AddRange(red, blue);
+        dbContext.Accounts.AddRange(
+            NewAccount(AccountRole.Admin, "Admin", "User", "admin@orisync.test", null, now),
+            NewAccount(AccountRole.Mentor, "Red", "Mentor", "red.mentor@orisync.test", red, now, "223456780"),
+            NewAccount(AccountRole.Mentor, "Blue", "Mentor", "blue.mentor@orisync.test", blue, now, "223456781"));
+        await dbContext.SaveChangesAsync();
+        return (red.Id, blue.Id);
+    }
+
+    private static OrientationGroup NewGroup(
+        Orientation orientation,
+        string name,
+        string color,
+        DateTimeOffset now) => new()
+        {
+            Orientation = orientation,
+            Name = name,
+            NormalizedName = name.ToLowerInvariant(),
+            BadgeColor = color,
+            IsActive = true,
+            CreatedAt = now
+        };
+
+    private static Account NewAccount(
+        AccountRole role,
+        string firstName,
+        string surname,
+        string email,
+        OrientationGroup? group,
+        DateTimeOffset now,
+        string? institutionNumber = null)
+    {
+        var person = new Person
+        {
+            PersonType = role == AccountRole.Admin ? PersonType.Admin : PersonType.Mentor,
+            InstitutionNumber = institutionNumber,
+            FirstName = firstName,
+            Surname = surname,
+            CreatedAt = now
+        };
+        person.Emails.Add(new PersonEmail
+        {
+            EmailType = EmailType.Login,
+            Email = email,
+            NormalizedEmail = email,
+            CreatedAt = now
+        });
+        var account = new Account
+        {
+            Person = person,
+            Role = role,
+            CurrentGroup = group,
+            IsActive = true,
+            CreatedAt = now
+        };
+        account.PasswordHash = new PasswordHasher<Account>().HashPassword(account, Password);
+        return account;
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void SetUtcNow(DateTimeOffset value) => _utcNow = value;
+    }
+}

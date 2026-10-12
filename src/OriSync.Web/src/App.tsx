@@ -12,6 +12,8 @@ import { useSessionActivity } from './auth/useSessionActivity'
 import { MentorActivation } from './mentors/MentorActivation'
 import { MentorManagement } from './mentors/MentorManagement'
 import { OrientationSettings } from './orientation/OrientationSettings'
+import { AdminStudentDirectory } from './students/AdminStudentDirectory'
+import { StudentManagement } from './students/StudentManagement'
 
 function App() {
   const [activation] = useState(() => readActivationLink())
@@ -141,27 +143,11 @@ function SignedInPanel({
     return <AdminWorkspace session={session} onChangePassword={onChangePassword} onLogout={onLogout} />
   }
 
-  return (
-    <main className="signed-in-panel">
-      <p className="eyebrow">{session.role} account</p>
-      <h1>Welcome, {session.firstName}</h1>
-      <p>
-        Authentication is active. Your operational dashboard will be added in
-        its dedicated feature branch.
-      </p>
-      {session.role === 'Mentor' && session.groupId === null && (
-        <p className="account-warning">No group is assigned. Contact the administrator.</p>
-      )}
-      <div className="button-row">
-        <button className="secondary-button" type="button" onClick={onChangePassword}>Change password</button>
-        <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
-      </div>
-    </main>
-  )
+  return <MentorWorkspace session={session} onChangePassword={onChangePassword} onLogout={onLogout} />
 }
 
 function AdminWorkspace({ session, onChangePassword, onLogout }: { session: Session; onChangePassword: () => void; onLogout: () => void }) {
-  const [section, setSection] = useState<'mentors' | 'orientations'>('orientations')
+  const [section, setSection] = useState<'students' | 'mentors' | 'orientations'>('orientations')
   return (
     <>
       <div className="account-toolbar">
@@ -170,10 +156,26 @@ function AdminWorkspace({ session, onChangePassword, onLogout }: { session: Sess
         <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
       </div>
       <nav className="admin-navigation" aria-label="Admin settings">
+        <button className={section === 'students' ? 'active' : ''} type="button" onClick={() => setSection('students')}>Students</button>
         <button className={section === 'mentors' ? 'active' : ''} type="button" onClick={() => setSection('mentors')}>Mentors</button>
         <button className={section === 'orientations' ? 'active' : ''} type="button" onClick={() => setSection('orientations')}>Orientations and groups</button>
       </nav>
-      {section === 'mentors' ? <MentorManagement /> : <OrientationSettings />}
+      {section === 'students' ? <AdminStudentDirectory /> : section === 'mentors' ? <MentorManagement /> : <OrientationSettings />}
+    </>
+  )
+}
+
+function MentorWorkspace({ session, onChangePassword, onLogout }: { session: Session; onChangePassword: () => void; onLogout: () => void }) {
+  return (
+    <>
+      <div className="account-toolbar mentor-toolbar">
+        <span>{session.firstName} {session.surname}</span>
+        <button className="secondary-button" type="button" onClick={onChangePassword}>Change password</button>
+        <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
+      </div>
+      {session.groupId === null
+        ? <main className="signed-in-panel"><p className="eyebrow">Mentor account</p><h1>Welcome, {session.firstName}</h1><p className="account-warning">No group is assigned. Contact the administrator.</p></main>
+        : <StudentManagement />}
     </>
   )
 }

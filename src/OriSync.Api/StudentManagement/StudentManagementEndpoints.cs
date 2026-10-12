@@ -1,0 +1,134 @@
+using System.Globalization;
+using System.Security.Claims;
+using OriSync.Api.Authentication;
+
+namespace OriSync.Api.StudentManagement;
+
+public static class StudentManagementEndpoints
+{
+    public static IEndpointRouteBuilder MapStudentManagementEndpoints(
+        this IEndpointRouteBuilder endpoints)
+    {
+        var mentor = endpoints.MapGroup("/api/mentor/students")
+            .RequireAuthorization(policy => policy.RequireRole("Mentor"))
+            .AddEndpointFilter<StudentManagementExceptionFilter>()
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
+
+        mentor.MapGet("", async (
+            string? search,
+            int? page,
+            int? pageSize,
+            ClaimsPrincipal principal,
+            StudentManagementService service,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await service.GetMentorDirectoryAsync(
+                GetAccountId(principal),
+                search,
+                page ?? 1,
+                pageSize ?? 10,
+                cancellationToken)));
+
+        mentor.MapGet("/lookup/{studentNumber}", async (
+            string studentNumber,
+            ClaimsPrincipal principal,
+            StudentManagementService service,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await service.LookupAsync(
+                GetAccountId(principal),
+                studentNumber,
+                cancellationToken)));
+
+        mentor.MapGet("/{enrollmentId:long}", async (
+            long enrollmentId,
+            ClaimsPrincipal principal,
+            StudentManagementService service,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await service.GetProfileAsync(
+                GetAccountId(principal),
+                enrollmentId,
+                cancellationToken)));
+
+        mentor.MapPost("", async (
+            SaveStudentRequest request,
+            ClaimsPrincipal principal,
+            StudentManagementService service,
+            CancellationToken cancellationToken) =>
+        {
+            var created = await service.CreateAsync(
+                GetAccountId(principal),
+                request,
+                cancellationToken);
+            return Results.Created($"/api/mentor/students/{created.Student.EnrollmentId}", created);
+        });
+
+        mentor.MapPost("/onboard", async (
+            OnboardExistingStudentRequest request,
+            ClaimsPrincipal principal,
+            StudentManagementService service,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await service.OnboardExistingAsync(
+                GetAccountId(principal),
+                request,
+                cancellationToken)));
+
+        mentor.MapPut("/{enrollmentId:long}", async (
+            long enrollmentId,
+            SaveStudentRequest request,
+            ClaimsPrincipal principal,
+            StudentManagementService service,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await service.UpdateAsync(
+                GetAccountId(principal),
+                enrollmentId,
+                request,
+                cancellationToken)));
+
+        mentor.MapPost("/{enrollmentId:long}/remove", async (
+            long enrollmentId,
+            ClaimsPrincipal principal,
+            StudentManagementService service,
+            CancellationToken cancellationToken) =>
+        {
+            await service.RemoveAsync(
+                GetAccountId(principal),
+                enrollmentId,
+                cancellationToken);
+            return Results.NoContent();
+        });
+
+        var admin = endpoints.MapGroup("/api/admin/students")
+            .RequireAuthorization(policy => policy.RequireRole("Admin"))
+            .AddEndpointFilter<StudentManagementExceptionFilter>()
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
+
+        admin.MapGet("", async (
+            string? search,
+            long? groupId,
+            bool? unassigned,
+            int? page,
+            int? pageSize,
+            StudentManagementService service,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await service.GetAdminDirectoryAsync(
+                search,
+                groupId,
+                unassigned ?? false,
+                page ?? 1,
+                pageSize ?? 10,
+                cancellationToken)));
+
+        return endpoints;
+    }
+
+    private static long GetAccountId(ClaimsPrincipal principal) =>
+        long.TryParse(
+            principal.FindFirstValue(ClaimTypes.NameIdentifier),
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out var accountId)
+            ? accountId
+            : throw new StudentManagementException(
+                StatusCodes.Status401Unauthorized,
+                "Authentication required.",
+                "The account session is invalid.");
+}

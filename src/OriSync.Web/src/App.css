@@ -265,6 +265,145 @@ h2 {
   opacity: 0.45;
 }
 
+.student-heading {
+  align-items: center;
+}
+
+.student-filters {
+  grid-template-columns: minmax(14rem, 1fr) minmax(7rem, 10rem);
+}
+
+.admin-student-filters {
+  grid-template-columns: minmax(14rem, 2fr) minmax(10rem, 1fr) minmax(7rem, 0.5fr);
+}
+
+.onboarding-card {
+  display: grid;
+  gap: 1.25rem;
+  border-top: 0.3rem solid #fdb813;
+}
+
+.lookup-form {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) auto auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.lookup-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-left: 0.25rem solid #005596;
+  padding: 1rem;
+  background: #eaf2f7;
+}
+
+.lookup-result p {
+  margin: 0;
+  color: #18364d;
+  font-weight: 700;
+}
+
+.student-form {
+  display: grid;
+  gap: 1.25rem;
+  border-top: 1px solid #dce4e8;
+  padding-top: 1.25rem;
+}
+
+.student-form-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.student-form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.student-table {
+  min-width: 54rem;
+}
+
+.attendance-present {
+  color: #0f6238;
+  background: #dff5e8;
+}
+
+.attendance-absent {
+  color: #852126;
+  background: #fff0f1;
+}
+
+.attendance-pending {
+  color: #526a78;
+  background: #eaf0f3;
+}
+
+.row-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.student-mobile-directory {
+  display: none;
+}
+
+.student-card {
+  display: grid;
+  gap: 0.9rem;
+  border: 1px solid #d7e0e5;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: #fff;
+}
+
+.student-card-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.student-card h2,
+.student-card p,
+.student-card dl {
+  margin: 0;
+}
+
+.student-card h2 {
+  font-size: 1.2rem;
+}
+
+.student-card-heading p,
+.student-email {
+  margin-top: 0.2rem;
+  color: #607985;
+  overflow-wrap: anywhere;
+}
+
+.student-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.student-card dt {
+  color: #718590;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.student-card dd {
+  margin: 0.15rem 0 0;
+  color: #18364d;
+  font-weight: 700;
+}
+
 .status-delivery-failed,
 .status-expired,
 .status-cancelled,
@@ -672,7 +811,8 @@ h2 {
 
   .invite-form,
   .directory-filters,
-  .mentor-edit-grid {
+  .mentor-edit-grid,
+  .student-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -718,6 +858,8 @@ h2 {
   .invite-form,
   .directory-filters,
   .mentor-edit-grid,
+  .student-form-grid,
+  .lookup-form,
   .pagination {
     align-items: stretch;
     grid-template-columns: 1fr;
@@ -726,5 +868,31 @@ h2 {
   .admin-navigation,
   .pagination {
     flex-direction: column;
+  }
+
+  .student-heading,
+  .student-form-heading,
+  .lookup-result {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .student-desktop-directory {
+    display: none;
+  }
+
+  .student-mobile-directory {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .mentor-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-bottom: 1px solid #d7e0e5;
+    margin-top: 0;
+    padding-block: 0.75rem;
+    background: #f3f6f8;
   }
 }
