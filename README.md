@@ -34,6 +34,12 @@ single-use activation link and supplies their own identity and password.
 Administrators can reassign, edit, disable, reactivate and, after six months,
 permanently delete mentor accounts.
 
+Feature 6 adds individual student registration, demographic profiles,
+group-scoped mentor editing and removal, immediate Present status on onboarding,
+and next-day cross-group transfers that preserve the source group's daily
+attendance. The administrator receives a read-only, filterable student
+directory.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -135,3 +141,5 @@ session rules, accepted reset risk and one-time admin bootstrap procedure. See
 rules and administrative API.
 See [mentor management](docs/mentor-management.md) for Feature 5 invitation,
 directory and account-lifecycle rules.
+See [student management](docs/student-management.md) for Feature 6 identity,
+onboarding, removal, transfer and concurrency rules.
