@@ -1,7 +1,7 @@
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { sendJson } from '../auth/api'
-import { requestRearCamera } from './camera'
+import { describeCameraError, requestRearCamera, stopMediaStream } from './camera'
 import type { AttendanceMutationResponse, AttendanceProblem } from './types'
 import './AttendanceScanner.css'
 
@@ -20,13 +20,24 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
   const [processing, setProcessing] = useState(false)
   const [cameraError, setCameraError] = useState('')
   const [result, setResult] = useState<ScannerResult | null>(null)
+  const [pageVisible, setPageVisible] = useState(() => document.visibilityState !== 'hidden')
 
   const stopCamera = useCallback(() => {
     controlsRef.current?.stop()
     controlsRef.current = null
-    streamRef.current?.getTracks().forEach((track) => track.stop())
+    if (streamRef.current) stopMediaStream(streamRef.current)
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
+  }, [])
+
+  const stopPendingInitialCamera = useCallback(() => {
+    const pendingCamera = initialCameraStreamRef.current
+    initialCameraStreamRef.current = null
+    if (pendingCamera) {
+      // getUserMedia promises cannot be cancelled. If Android resolves the
+      // request after the page is hidden, stop that late stream immediately.
+      void pendingCamera.then(stopMediaStream, () => undefined)
+    }
   }, [])
 
   const submitDecodedUrl = useCallback(async (decodedUrl: string) => {
@@ -69,8 +80,37 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
   }, [])
 
   useEffect(() => {
+    function suspendCamera() {
+      setPageVisible(false)
+      stopPendingInitialCamera()
+      stopCamera()
+    }
+
+    function resumeCamera() {
+      setCameraError('')
+      setPageVisible(true)
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') suspendCamera()
+      else resumeCamera()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', suspendCamera)
+    window.addEventListener('pageshow', resumeCamera)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', suspendCamera)
+      window.removeEventListener('pageshow', resumeCamera)
+      stopPendingInitialCamera()
+      stopCamera()
+    }
+  }, [stopCamera, stopPendingInitialCamera])
+
+  useEffect(() => {
     const video = videoRef.current
-    if (processing || result || cameraError || !video) return
+    if (!pageVisible || processing || result || cameraError || !video) return
 
     let disposed = false
     const reader = new BrowserQRCodeReader(undefined, {
@@ -83,7 +123,7 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
     void cameraStream
       .then((stream) => {
         if (disposed) {
-          stream.getTracks().forEach((track) => track.stop())
+          stopMediaStream(stream)
           return undefined
         }
 
@@ -108,10 +148,10 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
         if (disposed) controls.stop()
         else controlsRef.current = controls
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!disposed) {
           stopCamera()
-          setCameraError('The camera could not be started. Check camera permission and try again.')
+          setCameraError(describeCameraError(error))
         }
       })
 
@@ -119,15 +159,13 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
       disposed = true
       stopCamera()
     }
-  }, [cameraError, processing, result, stopCamera, submitDecodedUrl])
+  }, [cameraError, pageVisible, processing, result, stopCamera, submitDecodedUrl])
 
   useEffect(() => {
     if (!result?.autoClose) return
     const timeout = window.setTimeout(() => setResult(null), 5000)
     return () => window.clearTimeout(timeout)
   }, [result])
-
-  useEffect(() => stopCamera, [stopCamera])
 
   function closeResult() {
     setResult(null)
