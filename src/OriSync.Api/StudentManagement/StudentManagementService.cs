@@ -15,6 +15,7 @@ public sealed partial class StudentManagementService(
     TimeProvider timeProvider)
 {
     private static readonly int[] AllowedPageSizes = [10, 20, 50, 100];
+    private const string StudentEmailDomain = "@tut4life.ac.za";
 
     public async Task<StudentDirectoryResponse> GetMentorDirectoryAsync(
         long accountId,
@@ -566,7 +567,15 @@ public sealed partial class StudentManagementService(
         var number = ValidateStudentNumber(request.StudentNumber);
         var fullNames = ValidateName(request.FullNames, "Full names");
         var surname = ValidateName(request.Surname, "Surname");
-        var studentEmail = ValidateEmail(request.StudentEmail, "Student email");
+        var submittedStudentEmail = ValidateEmail(request.StudentEmail, "Student email");
+        var studentEmail = $"{number}{StudentEmailDomain}";
+        if (!string.Equals(
+                submittedStudentEmail,
+                studentEmail,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw Invalid($"Student email must be {studentEmail}.");
+        }
         var personalEmail = string.IsNullOrWhiteSpace(request.PersonalEmail)
             ? null
             : ValidateEmail(request.PersonalEmail, "Personal email");

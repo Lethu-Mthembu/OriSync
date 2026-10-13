@@ -28,7 +28,7 @@ describe('Student management', () => {
           fullNames: 'Élodie Anne-Marie',
           surname: "O'Connor",
           initials: 'EA',
-          studentEmail: 'student@tut.test',
+          studentEmail: '223456789@tut4life.ac.za',
           personalEmail: null,
           ageGroup: 'C1',
           gender: 'Male',
@@ -52,9 +52,11 @@ describe('Student management', () => {
     await user.type(screen.getByLabelText('Student number'), '223456789')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
+    const studentEmail = screen.getByLabelText(/Student email/)
+    expect(studentEmail).toHaveValue('223456789@tut4life.ac.za')
+    expect(studentEmail).toHaveAttribute('readonly')
     await user.type(screen.getByLabelText('Full names'), 'Élodie Anne-Marie')
     await user.type(screen.getByLabelText('Surname'), "O'Connor")
-    await user.type(screen.getByLabelText('Student email'), 'student@tut.test')
     await user.click(screen.getByRole('button', { name: 'Register as Present' }))
 
     expect(await screen.findByText("Élodie Anne-Marie O'Connor was registered as Present.")).toBeInTheDocument()
@@ -63,7 +65,7 @@ describe('Student management', () => {
       studentNumber: '223456789',
       fullNames: 'Élodie Anne-Marie',
       surname: "O'Connor",
-      studentEmail: 'student@tut.test',
+      studentEmail: '223456789@tut4life.ac.za',
       personalEmail: null,
       ageGroup: 'C1',
       gender: 'Male',

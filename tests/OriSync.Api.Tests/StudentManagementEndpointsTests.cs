@@ -124,6 +124,28 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RegistrationRejectsStudentEmailThatDoesNotMatchStudentNumber()
+    {
+        using var mentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var request = Student("223456789", "Jane", "Doe") with
+        {
+            StudentEmail = "incorrect@tut4life.ac.za"
+        };
+
+        var response = await SendJsonAsync(
+            mentor,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            "Student email must be 223456789@tut4life.ac.za.",
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RemovalThenDifferentGroupOnboardingPreservesTodayAndMovesTomorrow()
     {
         using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
@@ -264,7 +286,7 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
             Assert.Equal("223456789", payload.StudentNumber);
             Assert.Equal("Jane Mary", payload.FullNames);
             Assert.Equal("Doe", payload.Surname);
-            Assert.Equal("223456789@student.tut.test", payload.StudentEmail);
+            Assert.Equal("223456789@tut4life.ac.za", payload.StudentEmail);
             Assert.Equal(1, payload.Version);
             var tampered = decoded.Text.EndsWith('A')
                 ? $"{decoded.Text[..^1]}B"
@@ -390,7 +412,7 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
             number,
             fullNames,
             surname,
-            $"{number}@student.tut.test",
+            $"{number}@tut4life.ac.za",
             $"{number}@personal.test",
             StudentAgeGroup.C2,
             Gender.Female,
