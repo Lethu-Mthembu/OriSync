@@ -26,6 +26,7 @@ vi.mock('@zxing/browser', () => ({
 describe('Attendance scanner', () => {
   afterEach(() => {
     cleanup()
+    setDocumentVisibility('visible')
     vi.clearAllMocks()
     scanner.callback = undefined
     scanner.options = undefined
@@ -94,6 +95,47 @@ describe('Attendance scanner', () => {
     expect(scanner.stop).toHaveBeenCalled()
     expect(camera.stop).toHaveBeenCalled()
   })
+
+  it('releases the camera in the background and acquires a fresh stream on return', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+    const firstCamera = fakeStream()
+    const resumedCamera = fakeStream()
+    const getUserMedia = vi.fn().mockResolvedValue(resumedCamera.stream)
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
+
+    render(<AttendanceScanner initialCameraStream={Promise.resolve(firstCamera.stream)} onClose={vi.fn()} />)
+    await waitFor(() => expect(scanner.decode).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      setDocumentVisibility('hidden')
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(firstCamera.stop).toHaveBeenCalled()
+
+    act(() => {
+      setDocumentVisibility('visible')
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => expect(scanner.decode).toHaveBeenCalledTimes(2))
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(scanner.decode).toHaveBeenLastCalledWith(
+      resumedCamera.stream,
+      expect.any(HTMLVideoElement),
+      expect.any(Function),
+    )
+  })
+
+  it('identifies an Android camera-resource conflict instead of blaming permission', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+    const busyError = new DOMException('Could not start video source', 'NotReadableError')
+
+    render(<AttendanceScanner initialCameraStream={Promise.reject(busyError)} onClose={vi.fn()} />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The rear camera is busy or Android has not released it yet.',
+    )
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Allow camera access')
+  })
 })
 
 function fakeStream() {
@@ -108,5 +150,12 @@ function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function setDocumentVisibility(state: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: state,
   })
 }

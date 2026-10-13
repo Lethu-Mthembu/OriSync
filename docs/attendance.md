@@ -48,6 +48,12 @@ navigating away from the scanner stops both ZXing controls and all active
 camera tracks. The scanner page remains mounted while successive students are
 processed; it requests a fresh rear-camera stream after each stopped scan.
 
+When Android backgrounds the browser, OriSync immediately stops the active
+camera tracks so another camera or QR application can use the hardware. Returning
+to OriSync requests a fresh stream. If Android has not released the camera yet,
+the scanner identifies the camera as busy and allows the mentor to retry; it does
+not incorrectly describe that condition as a permission failure.
+
 ## Manual correction
 
 `PUT /api/mentor/attendance/{enrollmentId}` accepts either `Present` or
