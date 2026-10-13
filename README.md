@@ -54,6 +54,10 @@ Feature 9 adds admin and mentor landing dashboards, daily attendance metrics,
 current-group ranking, and server-side Present/Absent filters for the paged
 student directories.
 
+Feature 10 adds current mentor registers and historical admin exports. It
+generates TUT-branded A4 landscape PDFs for one group and ZIP archives for all
+matching groups without storing generated files.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -163,3 +167,5 @@ See [attendance](docs/attendance.md) for Feature 8 daily rows, scanning,
 validation, manual correction and synchronization rules.
 See [dashboards and directories](docs/dashboards-directories.md) for Feature 9
 metric definitions, group ranking and attendance-filter rules.
+See [register reports](docs/register-reports.md) for Feature 10 access rules,
+PDF layout, filters, filenames and ZIP behavior.

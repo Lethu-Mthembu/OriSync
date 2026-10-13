@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Hosting;
@@ -15,6 +16,7 @@ using OriSync.Api.Dashboards;
 using OriSync.Api.Domain;
 using OriSync.Api.StudentManagement;
 using OriSync.Api.StudentQrCodes;
+using OriSync.Api.RegisterReports;
 using SkiaSharp;
 using Testcontainers.PostgreSql;
 using ZXing;
@@ -213,6 +215,95 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
             JsonOptions);
         Assert.NotNull(adminAbsent);
         Assert.Equal("223456788", Assert.Single(adminAbsent.Items).StudentNumber);
+    }
+
+    [Fact]
+    public async Task MentorDownloadsFilteredCurrentGroupRegisterWithoutStoringIt()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        (await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane Mary", "Doe"))).EnsureSuccessStatusCode();
+        await AddStudentWithoutAttendanceAsync(_redGroupId, "223456788", "John", "Smith");
+
+        var summary = await red.GetFromJsonAsync<RegisterSummaryResponse>(
+            "/api/mentor/registers/today/summary?attendanceStatus=Present",
+            JsonOptions);
+        Assert.NotNull(summary);
+        Assert.Equal(1, summary.RowCount);
+        Assert.Equal(RegisterFilter.Present, summary.AttendanceStatus);
+
+        var response = await red.GetAsync(
+            "/api/mentor/registers/today?attendanceStatus=Present");
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(
+            "Red-2027-02-01-08h00-Present.pdf",
+            response.Content.Headers.ContentDisposition?.FileNameStar ??
+                response.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        var content = await response.Content.ReadAsByteArrayAsync();
+        Assert.True(content.AsSpan().StartsWith("%PDF"u8));
+
+        var absent = await red.GetFromJsonAsync<RegisterSummaryResponse>(
+            "/api/mentor/registers/today/summary?attendanceStatus=Absent",
+            JsonOptions);
+        Assert.NotNull(absent);
+        Assert.Equal(1, absent.RowCount);
+    }
+
+    [Fact]
+    public async Task AdminDownloadsOneZipOfMatchingGroupPdfsAndRejectsEmptyOrFutureRegisters()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        (await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane", "Doe"))).EnsureSuccessStatusCode();
+        await AddStudentWithoutAttendanceAsync(_blueGroupId, "223456788", "John", "Smith");
+
+        using var admin = await CreateAdminClientAsync();
+        var summary = await admin.GetFromJsonAsync<RegisterSummaryResponse>(
+            $"/api/admin/registers/summary?orientationId=1&date=2027-02-01&attendanceStatus=All",
+            JsonOptions);
+        Assert.NotNull(summary);
+        Assert.Equal(2, summary.RowCount);
+        Assert.Equal(2, summary.GroupCount);
+
+        var response = await admin.GetAsync(
+            "/api/admin/registers/zip?orientationId=1&date=2027-02-01&attendanceStatus=All");
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/zip", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(
+            "OriSync-2027-02-01-08h00-All.zip",
+            response.Content.Headers.ContentDisposition?.FileNameStar ??
+                response.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        await using var zipStream = await response.Content.ReadAsStreamAsync();
+        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+        Assert.Equal(["Blue-2027-02-01-08h00-All.pdf", "Red-2027-02-01-08h00-All.pdf"],
+            archive.Entries.Select(item => item.FullName));
+        foreach (var entry in archive.Entries)
+        {
+            await using var entryStream = entry.Open();
+            var signature = new byte[4];
+            await entryStream.ReadExactlyAsync(signature);
+            Assert.Equal("%PDF"u8.ToArray(), signature);
+        }
+
+        var empty = await admin.GetAsync(
+            $"/api/admin/registers/pdf?orientationId=1&date=2027-02-01&" +
+            $"groupId={_blueGroupId}&attendanceStatus=Present");
+        Assert.Equal(HttpStatusCode.Conflict, empty.StatusCode);
+        var future = await admin.GetAsync(
+            "/api/admin/registers/zip?orientationId=1&date=2027-02-02&attendanceStatus=All");
+        Assert.Equal(HttpStatusCode.BadRequest, future.StatusCode);
+
+        using var mentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var forbidden = await mentor.GetAsync(
+            "/api/admin/registers/zip?orientationId=1&date=2027-02-01&attendanceStatus=All");
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
     }
 
     [Fact]

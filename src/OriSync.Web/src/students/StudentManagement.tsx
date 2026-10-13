@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { getError, sendJson } from '../auth/api'
 import type { AttendanceMutationResponse, AttendanceStatus } from '../attendance/types'
+import { downloadResponse } from '../registers/download'
+import type { RegisterFilter, RegisterSummary } from '../registers/types'
 import type {
   Ethnicity,
   Gender,
@@ -33,7 +35,7 @@ const emptyStudent: StudentFormValues = {
 export function StudentManagement() {
   const [directory, setDirectory] = useState<StudentDirectoryResponse | null>(null)
   const [search, setSearch] = useState('')
-  const [attendanceStatus, setAttendanceStatus] = useState('all')
+  const [attendanceStatus, setAttendanceStatus] = useState<RegisterFilter>('All')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [loading, setLoading] = useState(true)
@@ -44,13 +46,15 @@ export function StudentManagement() {
   const [qrStudent, setQrStudent] = useState<StudentDirectoryItem | null>(null)
   const [qrImageUrl, setQrImageUrl] = useState('')
   const [qrLoading, setQrLoading] = useState(false)
+  const [registerSummary, setRegisterSummary] = useState<RegisterSummary | null>(null)
+  const [registerDownloading, setRegisterDownloading] = useState(false)
 
   const load = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
     setError('')
     const values = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
     if (search.trim()) values.set('search', search.trim())
-    if (attendanceStatus !== 'all') values.set('attendanceStatus', attendanceStatus)
+    if (attendanceStatus !== 'All') values.set('attendanceStatus', attendanceStatus)
     try {
       const response = await fetch(`/api/mentor/students?${values}`, {
         credentials: 'same-origin',
@@ -58,6 +62,12 @@ export function StudentManagement() {
       })
       if (!response.ok) throw new Error(await getError(response))
       setDirectory((await response.json()) as StudentDirectoryResponse)
+      const registerResponse = await fetch(`/api/mentor/registers/today/summary?attendanceStatus=${attendanceStatus}`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+      if (!registerResponse.ok) throw new Error(await getError(registerResponse))
+      setRegisterSummary((await registerResponse.json()) as RegisterSummary)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Students could not be loaded.')
     } finally {
@@ -170,11 +180,29 @@ export function StudentManagement() {
     setQrStudent(null)
   }
 
+  async function downloadRegister() {
+    if (!registerSummary || registerSummary.rowCount === 0) return
+    setRegisterDownloading(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/mentor/registers/today?attendanceStatus=${attendanceStatus}`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+      if (!response.ok) throw new Error(await getError(response))
+      await downloadResponse(response, 'register.pdf')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The register could not be downloaded.')
+    } finally {
+      setRegisterDownloading(false)
+    }
+  }
+
   return (
     <main className="settings-workspace student-workspace">
       <header className="settings-heading student-heading">
         <div><p className="eyebrow">Mentor workspace</p><h1>Students</h1><p>Manage only the students assigned to your group.</p></div>
-        <button className="primary-button" type="button" onClick={() => { setAdding(true); setEditing(null); setError(''); setNotice('') }}>Add student</button>
+        <div className="student-heading-actions"><button className="secondary-button" type="button" disabled={registerDownloading || !registerSummary || registerSummary.rowCount === 0} onClick={() => void downloadRegister()}>{registerDownloading ? 'Preparing…' : 'Download register'}</button><button className="primary-button" type="button" onClick={() => { setAdding(true); setEditing(null); setError(''); setNotice('') }}>Add student</button></div>
       </header>
 
       {error && <p className="error-message" role="alert">{error}</p>}
@@ -186,7 +214,7 @@ export function StudentManagement() {
       <section className="settings-card directory-card">
         <div className="directory-filters student-filters">
           <label className="field">Search<input type="search" value={search} placeholder="Student number or name" onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label>
-          <label className="field">Attendance<select value={attendanceStatus} onChange={(event) => { setAttendanceStatus(event.target.value); setPage(1) }}><option value="all">All</option><option value="Present">Present</option><option value="Absent">Absent</option></select></label>
+          <label className="field">Attendance<select value={attendanceStatus} onChange={(event) => { setAttendanceStatus(event.target.value as RegisterFilter); setPage(1) }}><option value="All">All</option><option value="Present">Present</option><option value="Absent">Absent</option></select></label>
           <label className="field">Rows<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}>{pageSizes.map((size) => <option key={size}>{size}</option>)}</select></label>
         </div>
 

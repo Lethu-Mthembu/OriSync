@@ -15,6 +15,7 @@ import { MentorDashboard } from './dashboards/MentorDashboard'
 import { MentorActivation } from './mentors/MentorActivation'
 import { MentorManagement } from './mentors/MentorManagement'
 import { OrientationSettings } from './orientation/OrientationSettings'
+import { RegisterReports } from './registers/RegisterReports'
 import { AdminStudentDirectory } from './students/AdminStudentDirectory'
 import { StudentManagement } from './students/StudentManagement'
 
@@ -166,7 +167,7 @@ function SignedInPanel({
 }
 
 function AdminWorkspace({ session, onChangePassword, onLogout }: { session: Session; onChangePassword: () => void; onLogout: () => void }) {
-  const [section, setSection] = useState<'dashboard' | 'students' | 'mentors' | 'orientations'>('dashboard')
+  const [section, setSection] = useState<'dashboard' | 'students' | 'mentors' | 'reports' | 'orientations'>('dashboard')
   return (
     <>
       <div className="account-toolbar">
@@ -178,9 +179,10 @@ function AdminWorkspace({ session, onChangePassword, onLogout }: { session: Sess
         <button className={section === 'dashboard' ? 'active' : ''} type="button" onClick={() => setSection('dashboard')}>Dashboard</button>
         <button className={section === 'students' ? 'active' : ''} type="button" onClick={() => setSection('students')}>Students</button>
         <button className={section === 'mentors' ? 'active' : ''} type="button" onClick={() => setSection('mentors')}>Mentors</button>
+        <button className={section === 'reports' ? 'active' : ''} type="button" onClick={() => setSection('reports')}>Registers</button>
         <button className={section === 'orientations' ? 'active' : ''} type="button" onClick={() => setSection('orientations')}>Orientations and groups</button>
       </nav>
-      {section === 'dashboard' ? <AdminDashboard /> : section === 'students' ? <AdminStudentDirectory /> : section === 'mentors' ? <MentorManagement /> : <OrientationSettings />}
+      {section === 'dashboard' ? <AdminDashboard /> : section === 'students' ? <AdminStudentDirectory /> : section === 'mentors' ? <MentorManagement /> : section === 'reports' ? <RegisterReports /> : <OrientationSettings />}
     </>
   )
 }

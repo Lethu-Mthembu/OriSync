@@ -18,6 +18,7 @@ describe('Student management', () => {
       const path = String(input)
       requests.push({ path, init })
       if (path.startsWith('/api/mentor/students?')) return response(emptyDirectory)
+      if (path.startsWith('/api/mentor/registers/today/summary')) return response({ rowCount: 0, groupCount: 0, attendanceStatus: 'All' })
       if (path === '/api/mentor/students/lookup/223456789') return response({ match: 'New', studentNumber: '223456789', fullNames: null, surname: null, studentEmail: null, groupName: null, message: null })
       if (path === '/api/auth/csrf') return response({ requestToken: 'csrf-token' })
       if (path === '/api/mentor/students') return response({
@@ -100,6 +101,7 @@ describe('Student management', () => {
           qrVersion: 1,
         }],
       })
+      if (path.startsWith('/api/mentor/registers/today/summary')) return response({ rowCount: 0, groupCount: 0, attendanceStatus: 'All' })
       throw new Error(`Unexpected request: ${path}`)
     }))
 
@@ -141,6 +143,7 @@ describe('Student management', () => {
         totalPages: 1,
         items: [{ ...student, attendanceStatus: currentStatus }],
       })
+      if (path.startsWith('/api/mentor/registers/today/summary')) return response({ rowCount: 1, groupCount: 1, attendanceStatus: 'All' })
       if (path === '/api/auth/csrf') return response({ requestToken: 'csrf-token' })
       if (path === '/api/mentor/attendance/7') {
         currentStatus = 'Present'
@@ -199,6 +202,7 @@ describe('Student management', () => {
         totalPages: 1,
         items: [student],
       })
+      if (path.startsWith('/api/mentor/registers/today/summary')) return response({ rowCount: 1, groupCount: 1, attendanceStatus: 'All' })
       if (path === '/api/mentor/students/7/qr' || path === '/api/mentor/students/7/qr/download') {
         return new Response(new Blob(['png'], { type: 'image/png' }), {
           headers: { 'Content-Type': 'image/png' },

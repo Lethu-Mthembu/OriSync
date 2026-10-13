@@ -14,6 +14,7 @@ using OriSync.Api.Domain;
 using OriSync.Api.Health;
 using OriSync.Api.MentorManagement;
 using OriSync.Api.OrientationManagement;
+using OriSync.Api.RegisterReports;
 using OriSync.Api.StudentManagement;
 using OriSync.Api.StudentQrCodes;
 
@@ -54,6 +55,8 @@ builder.Services.AddScoped<StudentTransferReconciler>();
 builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<DailyAttendanceMaterializer>();
+builder.Services.AddScoped<RegisterReportService>();
+builder.Services.AddSingleton<RegisterPdfRenderer>();
 builder.Services.AddScoped<StudentQrCodeService>();
 builder.Services.AddSingleton<StudentQrCodeTokenService>();
 builder.Services.AddSingleton<StudentQrCodeImageRenderer>();
@@ -252,6 +255,7 @@ app.MapMentorManagementEndpoints();
 app.MapStudentManagementEndpoints();
 app.MapAttendanceEndpoints();
 app.MapDashboardEndpoints();
+app.MapRegisterReportEndpoints();
 
 app.MapFallbackToFile("index.html");
 
