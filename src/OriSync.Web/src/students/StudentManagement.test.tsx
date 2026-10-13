@@ -47,7 +47,7 @@ describe('Student management', () => {
     const user = userEvent.setup()
 
     render(<StudentManagement />)
-    await screen.findByText('No students match this search.')
+    await screen.findByText('No students match these filters.')
     await user.click(screen.getByRole('button', { name: 'Add student' }))
     await user.type(screen.getByLabelText('Student number'), '223456789')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
@@ -130,6 +130,7 @@ describe('Student management', () => {
       qrVersion: 1,
     }
     const requests: Array<{ path: string; init?: RequestInit }> = []
+    let currentStatus: 'Present' | 'Absent' = 'Absent'
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
@@ -138,18 +139,21 @@ describe('Student management', () => {
         ...emptyDirectory,
         totalItems: 1,
         totalPages: 1,
-        items: [student],
+        items: [{ ...student, attendanceStatus: currentStatus }],
       })
       if (path === '/api/auth/csrf') return response({ requestToken: 'csrf-token' })
-      if (path === '/api/mentor/attendance/7') return response({
-        outcome: 'Corrected',
-        enrollmentId: 7,
-        studentNumber: student.studentNumber,
-        fullNames: student.fullNames,
-        surname: student.surname,
-        status: 'Present',
-        message: 'Jane Mary Doe was marked Present.',
-      })
+      if (path === '/api/mentor/attendance/7') {
+        currentStatus = 'Present'
+        return response({
+          outcome: 'Corrected',
+          enrollmentId: 7,
+          studentNumber: student.studentNumber,
+          fullNames: student.fullNames,
+          surname: student.surname,
+          status: 'Present',
+          message: 'Jane Mary Doe was marked Present.',
+        })
+      }
       throw new Error(`Unexpected request: ${path}`)
     }))
     const user = userEvent.setup()

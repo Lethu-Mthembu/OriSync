@@ -14,7 +14,8 @@ namespace OriSync.Api.StudentManagement;
 public sealed partial class StudentManagementService(
     OriSyncDbContext dbContext,
     TimeProvider timeProvider,
-    DailyAttendanceMaterializer attendanceMaterializer)
+    DailyAttendanceMaterializer attendanceMaterializer,
+    StudentTransferReconciler transferReconciler)
 {
     private static readonly int[] AllowedPageSizes = [10, 20, 50, 100];
     private const string StudentEmailDomain = "@tut4life.ac.za";
@@ -22,13 +23,14 @@ public sealed partial class StudentManagementService(
     public async Task<StudentDirectoryResponse> GetMentorDirectoryAsync(
         long accountId,
         string? search,
+        AttendanceStatus? attendanceStatus,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         ValidatePaging(page, pageSize);
         var context = await GetMentorContextAsync(accountId, cancellationToken);
-        await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
         if (IsOrientationDay(context.Orientation, context.LocalDate))
         {
             await attendanceMaterializer.EnsureGroupAsync(
@@ -43,6 +45,7 @@ public sealed partial class StudentManagementService(
                 item.CurrentGroupId == context.Group.Id ||
                 item.PendingGroupId == context.Group.Id);
         query = ApplySearch(query, search);
+        query = ApplyAttendanceStatus(query, attendanceStatus, context.LocalDate);
         return await PageAsync(query, page, pageSize, context.LocalDate, cancellationToken);
     }
 
@@ -50,6 +53,7 @@ public sealed partial class StudentManagementService(
         string? search,
         long? groupId,
         bool unassigned,
+        AttendanceStatus? attendanceStatus,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
@@ -64,7 +68,7 @@ public sealed partial class StudentManagementService(
         }
 
         var localDate = GetLocalDateTime(orientation).Date;
-        await ReconcileTransfersAsync(orientation.Id, localDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(orientation.Id, localDate, cancellationToken);
         if (IsOrientationDay(orientation, localDate))
         {
             await attendanceMaterializer.EnsureOrientationAsync(
@@ -85,6 +89,7 @@ public sealed partial class StudentManagementService(
         }
 
         query = ApplySearch(query, search);
+        query = ApplyAttendanceStatus(query, attendanceStatus, localDate);
         return await PageAsync(query, page, pageSize, localDate, cancellationToken);
     }
 
@@ -95,7 +100,7 @@ public sealed partial class StudentManagementService(
     {
         var number = ValidateStudentNumber(studentNumber);
         var context = await GetMentorContextAsync(accountId, cancellationToken);
-        await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
 
         var person = await dbContext.People
             .AsNoTracking()
@@ -155,7 +160,7 @@ public sealed partial class StudentManagementService(
         CancellationToken cancellationToken)
     {
         var context = await GetMentorContextAsync(accountId, cancellationToken);
-        await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
         var enrollment = await DirectoryQuery(context.Orientation.Id, context.LocalDate)
             .SingleOrDefaultAsync(
                 item => item.Id == enrollmentId &&
@@ -245,7 +250,7 @@ public sealed partial class StudentManagementService(
         var number = ValidateStudentNumber(request.StudentNumber);
         var context = await GetMentorContextAsync(accountId, cancellationToken);
         EnsureRegistrationOpen(context);
-        await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
@@ -326,7 +331,7 @@ public sealed partial class StudentManagementService(
         CancellationToken cancellationToken)
     {
         var context = await GetMentorContextAsync(accountId, cancellationToken);
-        await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
         var values = Validate(request);
         var enrollment = await dbContext.StudentEnrollments
             .Include(item => item.Student)
@@ -372,7 +377,7 @@ public sealed partial class StudentManagementService(
         CancellationToken cancellationToken)
     {
         var context = await GetMentorContextAsync(accountId, cancellationToken);
-        await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
         var enrollment = await dbContext.StudentEnrollments
             .Include(item => item.AttendanceRecords.Where(record =>
                 record.AttendanceDate == context.LocalDate))
@@ -439,6 +444,26 @@ public sealed partial class StudentManagementService(
             EF.Functions.ILike(item.Student.InstitutionNumber!, pattern) ||
             EF.Functions.ILike(item.Student.FirstName, pattern) ||
             EF.Functions.ILike(item.Student.Surname, pattern));
+    }
+
+    private static IQueryable<StudentEnrollment> ApplyAttendanceStatus(
+        IQueryable<StudentEnrollment> query,
+        AttendanceStatus? attendanceStatus,
+        DateOnly localDate)
+    {
+        if (attendanceStatus is null)
+        {
+            return query;
+        }
+
+        if (!Enum.IsDefined(attendanceStatus.Value))
+        {
+            throw Invalid("Attendance status must be Present or Absent.");
+        }
+
+        return query.Where(item => item.AttendanceRecords.Any(record =>
+            record.AttendanceDate == localDate &&
+            record.Status == attendanceStatus.Value));
     }
 
     private static void ValidatePaging(int page, int pageSize)
@@ -530,24 +555,6 @@ public sealed partial class StudentManagementService(
 
         var local = TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), zone);
         return (DateOnly.FromDateTime(local.DateTime), TimeOnly.FromDateTime(local.DateTime));
-    }
-
-    private async Task ReconcileTransfersAsync(
-        long orientationId,
-        DateOnly localDate,
-        CancellationToken cancellationToken)
-    {
-        await dbContext.StudentEnrollments
-            .Where(item => item.OrientationId == orientationId &&
-                item.PendingGroupId != null &&
-                item.PendingGroupEffectiveDate <= localDate)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(item => item.CurrentGroupId, item => item.PendingGroupId)
-                    .SetProperty(item => item.PendingGroupId, (long?)null)
-                    .SetProperty(item => item.PendingGroupEffectiveDate, (DateOnly?)null)
-                    .SetProperty(item => item.RemovedAt, (DateTimeOffset?)null),
-                cancellationToken);
     }
 
     private static StudentDirectoryItemResponse Map(

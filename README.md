@@ -50,6 +50,10 @@ scanner, backend signature and group validation, explicit manual corrections,
 lazy daily Absent rows and 15-second directory synchronization. Camera frames
 remain on the mentor's device; only the decoded signed URL reaches the API.
 
+Feature 9 adds admin and mentor landing dashboards, daily attendance metrics,
+current-group ranking, and server-side Present/Absent filters for the paged
+student directories.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -157,3 +161,5 @@ See [student QR codes](docs/student-qr-codes.md) for Feature 7 payload,
 signature, image and secret-management rules.
 See [attendance](docs/attendance.md) for Feature 8 daily rows, scanning,
 validation, manual correction and synchronization rules.
+See [dashboards and directories](docs/dashboards-directories.md) for Feature 9
+metric definitions, group ranking and attendance-filter rules.

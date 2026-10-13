@@ -33,6 +33,7 @@ const emptyStudent: StudentFormValues = {
 export function StudentManagement() {
   const [directory, setDirectory] = useState<StudentDirectoryResponse | null>(null)
   const [search, setSearch] = useState('')
+  const [attendanceStatus, setAttendanceStatus] = useState('all')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [loading, setLoading] = useState(true)
@@ -49,6 +50,7 @@ export function StudentManagement() {
     setError('')
     const values = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
     if (search.trim()) values.set('search', search.trim())
+    if (attendanceStatus !== 'all') values.set('attendanceStatus', attendanceStatus)
     try {
       const response = await fetch(`/api/mentor/students?${values}`, {
         credentials: 'same-origin',
@@ -61,7 +63,7 @@ export function StudentManagement() {
     } finally {
       if (showLoading) setLoading(false)
     }
-  }, [page, pageSize, search])
+  }, [attendanceStatus, page, pageSize, search])
 
   useEffect(() => {
     const task = window.setTimeout(() => void load(), 0)
@@ -111,6 +113,9 @@ export function StudentManagement() {
         : item),
     })
     setNotice(corrected.message)
+    // Re-query immediately so an item that no longer matches the active
+    // attendance filter disappears without waiting for the polling interval.
+    await load(false)
   }
 
   async function showQr(student: StudentDirectoryItem) {
@@ -181,6 +186,7 @@ export function StudentManagement() {
       <section className="settings-card directory-card">
         <div className="directory-filters student-filters">
           <label className="field">Search<input type="search" value={search} placeholder="Student number or name" onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label>
+          <label className="field">Attendance<select value={attendanceStatus} onChange={(event) => { setAttendanceStatus(event.target.value); setPage(1) }}><option value="all">All</option><option value="Present">Present</option><option value="Absent">Absent</option></select></label>
           <label className="field">Rows<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}>{pageSizes.map((size) => <option key={size}>{size}</option>)}</select></label>
         </div>
 
@@ -189,7 +195,7 @@ export function StudentManagement() {
             <div className="table-scroll student-desktop-directory"><table className="directory-table student-table"><thead><tr><th>Student</th><th>Number</th><th>Demographics</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((student) => <StudentRow key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} onAttendance={(item, status) => void correctAttendance(item, status)} />)}</tbody></table></div>
             <div className="student-mobile-directory">{directory.items.map((student) => <StudentCard key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} onAttendance={(item, status) => void correctAttendance(item, status)} />)}</div>
           </>
-        ) : <p className="empty-state">No students match this search.</p>}
+        ) : <p className="empty-state">No students match these filters.</p>}
 
         <div className="pagination"><button className="secondary-button" type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {directory?.page ?? page} of {Math.max(directory?.totalPages ?? 0, 1)}</span><button className="secondary-button" type="button" disabled={!directory || page >= directory.totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></div>
       </section>

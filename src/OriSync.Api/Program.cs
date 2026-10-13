@@ -9,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OriSync.Api.Attendance;
 using OriSync.Api.Authentication;
 using OriSync.Api.Data;
+using OriSync.Api.Dashboards;
 using OriSync.Api.Domain;
 using OriSync.Api.Health;
 using OriSync.Api.MentorManagement;
@@ -49,7 +50,9 @@ builder.Services.AddScoped<PasswordResetEmailOutboxProcessor>();
 builder.Services.AddScoped<OrientationManagementService>();
 builder.Services.AddScoped<MentorManagementService>();
 builder.Services.AddScoped<StudentManagementService>();
+builder.Services.AddScoped<StudentTransferReconciler>();
 builder.Services.AddScoped<AttendanceService>();
+builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<DailyAttendanceMaterializer>();
 builder.Services.AddScoped<StudentQrCodeService>();
 builder.Services.AddSingleton<StudentQrCodeTokenService>();
@@ -248,6 +251,7 @@ app.MapOrientationManagementEndpoints();
 app.MapMentorManagementEndpoints();
 app.MapStudentManagementEndpoints();
 app.MapAttendanceEndpoints();
+app.MapDashboardEndpoints();
 
 app.MapFallbackToFile("index.html");
 

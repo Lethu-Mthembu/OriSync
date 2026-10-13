@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using OriSync.Api.Authentication;
+using OriSync.Api.Domain;
 using OriSync.Api.StudentQrCodes;
 
 namespace OriSync.Api.StudentManagement;
@@ -17,6 +18,7 @@ public static class StudentManagementEndpoints
 
         mentor.MapGet("", async (
             string? search,
+            AttendanceStatus? attendanceStatus,
             int? page,
             int? pageSize,
             ClaimsPrincipal principal,
@@ -25,6 +27,7 @@ public static class StudentManagementEndpoints
             Results.Ok(await service.GetMentorDirectoryAsync(
                 GetAccountId(principal),
                 search,
+                attendanceStatus,
                 page ?? 1,
                 pageSize ?? 10,
                 cancellationToken)));
@@ -138,6 +141,7 @@ public static class StudentManagementEndpoints
             string? search,
             long? groupId,
             bool? unassigned,
+            AttendanceStatus? attendanceStatus,
             int? page,
             int? pageSize,
             StudentManagementService service,
@@ -146,6 +150,7 @@ public static class StudentManagementEndpoints
                 search,
                 groupId,
                 unassigned ?? false,
+                attendanceStatus,
                 page ?? 1,
                 pageSize ?? 10,
                 cancellationToken)));
