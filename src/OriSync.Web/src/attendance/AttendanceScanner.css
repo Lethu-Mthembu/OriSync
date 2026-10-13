@@ -83,6 +83,30 @@
   transform: translate(-50%, -50%);
 }
 
+.scanner-camera-picker {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1rem 0;
+  font-weight: 750;
+  text-align: left;
+}
+
+.scanner-camera-picker select {
+  min-width: 0;
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 0.25rem;
+  padding: 0.65rem;
+  color: #18364d;
+  background: #fff;
+}
+
+.scanner-camera-code {
+  display: block;
+  margin-bottom: 1rem;
+  color: #bed0da;
+  overflow-wrap: anywhere;
+}
+
 .scanner-result-backdrop {
   position: fixed;
   inset: 0;

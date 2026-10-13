@@ -1,7 +1,14 @@
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { sendJson } from '../auth/api'
-import { describeCameraError, requestRearCamera, stopMediaStream } from './camera'
+import {
+  describeCameraError,
+  listVideoInputDevices,
+  preferredRearCameraDevice,
+  requestRearCamera,
+  stopMediaStream,
+  type CameraFailure,
+} from './camera'
 import type { AttendanceMutationResponse, AttendanceProblem } from './types'
 import './AttendanceScanner.css'
 
@@ -18,7 +25,9 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
   const streamRef = useRef<MediaStream | null>(null)
   const initialCameraStreamRef = useRef<Promise<MediaStream> | null>(initialCameraStream)
   const [processing, setProcessing] = useState(false)
-  const [cameraError, setCameraError] = useState('')
+  const [cameraError, setCameraError] = useState<CameraFailure | null>(null)
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([])
+  const [selectedCameraId, setSelectedCameraId] = useState('')
   const [result, setResult] = useState<ScannerResult | null>(null)
   const [pageVisible, setPageVisible] = useState(() => document.visibilityState !== 'hidden')
 
@@ -87,7 +96,7 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
     }
 
     function resumeCamera() {
-      setCameraError('')
+      setCameraError(null)
       setPageVisible(true)
     }
 
@@ -110,7 +119,7 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
 
   useEffect(() => {
     const video = videoRef.current
-    if (!pageVisible || processing || result || cameraError || !video) return
+    if (!pageVisible || processing || result || cameraError !== null || !video) return
 
     let disposed = false
     const reader = new BrowserQRCodeReader(undefined, {
@@ -118,7 +127,7 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
       delayBetweenScanSuccess: 500,
     })
 
-    const cameraStream = initialCameraStreamRef.current ?? requestRearCamera()
+    const cameraStream = initialCameraStreamRef.current ?? requestRearCamera(selectedCameraId || undefined)
     initialCameraStreamRef.current = null
     void cameraStream
       .then((stream) => {
@@ -148,10 +157,21 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
         if (disposed) controls.stop()
         else controlsRef.current = controls
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if (!disposed) {
           stopCamera()
-          setCameraError(describeCameraError(error))
+          const failure = describeCameraError(error)
+          let devices: MediaDeviceInfo[] = []
+          try {
+            devices = await listVideoInputDevices()
+          } catch {
+            // Enumeration is a recovery aid. Preserve the original startup
+            // failure when a browser does not expose its device list.
+          }
+          if (disposed) return
+          setCameraDevices(devices)
+          setSelectedCameraId((current) => current || preferredRearCameraDevice(devices)?.deviceId || devices[0]?.deviceId || '')
+          setCameraError(failure)
         }
       })
 
@@ -159,7 +179,7 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
       disposed = true
       stopCamera()
     }
-  }, [cameraError, pageVisible, processing, result, stopCamera, submitDecodedUrl])
+  }, [cameraError, pageVisible, processing, result, selectedCameraId, stopCamera, submitDecodedUrl])
 
   useEffect(() => {
     if (!result?.autoClose) return
@@ -182,10 +202,21 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
         <div className="scanner-frame" aria-hidden="true" />
         <p className="scanner-instruction">Place the student QR code inside the frame.</p>
         {processing && <div className="scanner-processing" role="status">Verifying attendance…</div>}
-        {cameraError && (
+        {cameraError !== null && (
           <div className="scanner-camera-error" role="alert">
-            <p>{cameraError}</p>
-            <button className="primary-button" type="button" onClick={() => setCameraError('')}>Try again</button>
+            <p>{cameraError.message}</p>
+            {cameraDevices.length > 0 && (
+              <label className="scanner-camera-picker">
+                Camera
+                <select value={selectedCameraId} onChange={(event) => setSelectedCameraId(event.target.value)}>
+                  {cameraDevices.map((device, index) => (
+                    <option key={device.deviceId} value={device.deviceId}>{device.label || `Camera ${index + 1}`}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <small className="scanner-camera-code">{cameraError.code}{cameraError.detail ? `: ${cameraError.detail}` : ''}</small>
+            <button className="primary-button" type="button" onClick={() => setCameraError(null)}>Try selected camera</button>
           </div>
         )}
       </section>

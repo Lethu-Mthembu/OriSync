@@ -54,6 +54,13 @@ to OriSync requests a fresh stream. If Android has not released the camera yet,
 the scanner identifies the camera as busy and allows the mentor to retry; it does
 not incorrectly describe that condition as a permission failure.
 
+Some Android phones expose several rear lenses and fail when `facingMode`
+selects an unusable lens. After a startup failure, the scanner enumerates the
+available video inputs, prefers a device labelled as rear-facing and lets the
+mentor explicitly choose another camera. The underlying browser error code is
+shown for diagnosis. Camera labels and device identifiers remain in the browser
+and are not sent to the OriSync backend.
+
 ## Manual correction
 
 `PUT /api/mentor/attendance/{enrollmentId}` accepts either `Present` or
