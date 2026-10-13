@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using OriSync.Api.Attendance;
 using OriSync.Api.Authentication;
 using OriSync.Api.Data;
+using OriSync.Api.Dashboards;
 using OriSync.Api.Domain;
 using OriSync.Api.StudentManagement;
 using OriSync.Api.StudentQrCodes;
@@ -144,6 +145,74 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
             "Student email must be 223456789@tut4life.ac.za.",
             await response.Content.ReadAsStringAsync(),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DashboardsUseDailyRegisterCountsAndRankCurrentGroups()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        (await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane", "Doe"))).EnsureSuccessStatusCode();
+        await AddStudentWithoutAttendanceAsync(_blueGroupId, "223456788", "John", "Smith");
+
+        using var admin = await CreateAdminClientAsync();
+        var adminDashboard = await admin.GetFromJsonAsync<AdminDashboardResponse>(
+            "/api/admin/dashboard",
+            JsonOptions);
+
+        Assert.NotNull(adminDashboard);
+        Assert.True(adminDashboard.HasActiveOrientation);
+        Assert.Equal(2, adminDashboard.Metrics.TotalStudents);
+        Assert.Equal(1, adminDashboard.Metrics.PresentToday);
+        Assert.Equal(1, adminDashboard.Metrics.AbsentToday);
+        Assert.Equal(50m, adminDashboard.Metrics.AttendanceRate);
+        Assert.Equal(["BLUE", "RED"], adminDashboard.GroupRanking.Select(item => item.GroupName));
+        Assert.Equal([1, 2], adminDashboard.GroupRanking.Select(item => item.Rank));
+
+        var mentorDashboard = await red.GetFromJsonAsync<MentorDashboardResponse>(
+            "/api/mentor/dashboard",
+            JsonOptions);
+        Assert.NotNull(mentorDashboard);
+        Assert.Equal("RED", mentorDashboard.GroupName);
+        Assert.Equal(1, mentorDashboard.Metrics.TotalStudents);
+        Assert.Equal(1, mentorDashboard.Metrics.PresentToday);
+        Assert.Equal(0, mentorDashboard.Metrics.AbsentToday);
+        Assert.Equal(100m, mentorDashboard.Metrics.AttendanceRate);
+    }
+
+    [Fact]
+    public async Task StudentDirectoriesFilterByTodaysAttendanceStatus()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        (await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane", "Doe"))).EnsureSuccessStatusCode();
+        await AddStudentWithoutAttendanceAsync(_redGroupId, "223456788", "John", "Smith");
+
+        var present = await red.GetFromJsonAsync<StudentDirectoryResponse>(
+            "/api/mentor/students?attendanceStatus=Present&page=1&pageSize=10",
+            JsonOptions);
+        var absent = await red.GetFromJsonAsync<StudentDirectoryResponse>(
+            "/api/mentor/students?attendanceStatus=Absent&page=1&pageSize=10",
+            JsonOptions);
+
+        Assert.NotNull(present);
+        Assert.Equal("223456789", Assert.Single(present.Items).StudentNumber);
+        Assert.NotNull(absent);
+        Assert.Equal("223456788", Assert.Single(absent.Items).StudentNumber);
+
+        using var admin = await CreateAdminClientAsync();
+        var adminAbsent = await admin.GetFromJsonAsync<StudentDirectoryResponse>(
+            "/api/admin/students?groupId=" + _redGroupId +
+            "&attendanceStatus=Absent&page=1&pageSize=10",
+            JsonOptions);
+        Assert.NotNull(adminAbsent);
+        Assert.Equal("223456788", Assert.Single(adminAbsent.Items).StudentNumber);
     }
 
     [Fact]

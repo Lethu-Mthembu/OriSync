@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OriSync.Api.Data;
 using OriSync.Api.Domain;
+using OriSync.Api.StudentManagement;
 using OriSync.Api.StudentQrCodes;
 
 namespace OriSync.Api.Attendance;
@@ -9,7 +10,8 @@ public sealed class AttendanceService(
     OriSyncDbContext dbContext,
     TimeProvider timeProvider,
     StudentQrCodeTokenService tokenService,
-    DailyAttendanceMaterializer materializer)
+    DailyAttendanceMaterializer materializer,
+    StudentTransferReconciler transferReconciler)
 {
     public async Task<AttendanceMutationResponse> ScanAsync(
         long mentorAccountId,
@@ -18,7 +20,7 @@ public sealed class AttendanceService(
     {
         var context = await GetContextAsync(mentorAccountId, cancellationToken);
         EnsureAttendanceOpen(context);
-        await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
         await materializer.EnsureGroupAsync(
             context.Orientation.Id,
             context.Group.Id,
@@ -97,7 +99,7 @@ public sealed class AttendanceService(
 
         var context = await GetContextAsync(mentorAccountId, cancellationToken);
         EnsureAttendanceOpen(context);
-        await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        await transferReconciler.ReconcileAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
         await materializer.EnsureGroupAsync(
             context.Orientation.Id,
             context.Group.Id,
@@ -198,24 +200,6 @@ public sealed class AttendanceService(
             throw new InvalidOperationException(
                 $"Configured orientation timezone '{timeZoneId}' is unavailable.");
         }
-    }
-
-    private async Task ReconcileTransfersAsync(
-        long orientationId,
-        DateOnly localDate,
-        CancellationToken cancellationToken)
-    {
-        await dbContext.StudentEnrollments
-            .Where(item => item.OrientationId == orientationId &&
-                item.PendingGroupId != null &&
-                item.PendingGroupEffectiveDate <= localDate)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(item => item.CurrentGroupId, item => item.PendingGroupId)
-                    .SetProperty(item => item.PendingGroupId, (long?)null)
-                    .SetProperty(item => item.PendingGroupEffectiveDate, (DateOnly?)null)
-                    .SetProperty(item => item.RemovedAt, (DateTimeOffset?)null),
-                cancellationToken);
     }
 
     private static bool MatchesCurrentStudent(

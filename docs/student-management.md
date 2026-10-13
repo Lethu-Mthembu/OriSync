@@ -90,5 +90,7 @@ require an authenticated mentor and enforce the mentor's current group on the
 server.
 
 The administrator has one read-only endpoint at `/api/admin/students`. It
-supports text search, group filtering, an `UNASSIGNED` filter and page sizes of
-10, 20, 50 or 100 rows. The default is 10.
+supports text search, group filtering, an `UNASSIGNED` filter, today's Present
+or Absent status, and page sizes of 10, 20, 50 or 100 rows. The default is 10.
+The mentor directory supports the same attendance-status filter within the
+authenticated mentor's group. Filtering occurs before server-side pagination.

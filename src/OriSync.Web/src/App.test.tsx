@@ -48,10 +48,14 @@ describe('App authentication', () => {
     }
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(response(adminSession))
+      .mockResolvedValueOnce(response({ hasActiveOrientation: false, orientationName: null, attendanceDate: null, metrics: { totalStudents: 0, presentToday: 0, absentToday: 0, attendanceRate: 0 }, groupRanking: [] }))
       .mockResolvedValueOnce(response([])))
+    const user = userEvent.setup()
 
     render(<App />)
 
+    await screen.findByRole('heading', { name: 'Today at a glance' })
+    await user.click(screen.getByRole('button', { name: 'Orientations and groups' }))
     expect(await screen.findByRole('heading', { name: 'Orientations and groups' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create orientation' })).toBeInTheDocument()
   })
