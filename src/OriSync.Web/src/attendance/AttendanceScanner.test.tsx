@@ -49,7 +49,7 @@ describe('Attendance scanner', () => {
     const firstStream = fakeStream()
     const resumedStream = fakeStream()
     const getUserMedia = vi.fn().mockResolvedValue(resumedStream.stream)
-    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia, enumerateDevices: vi.fn().mockResolvedValue([]) } })
     const user = userEvent.setup()
 
     render(<AttendanceScanner initialCameraStream={Promise.resolve(firstStream.stream)} onClose={vi.fn()} />)
@@ -101,7 +101,7 @@ describe('Attendance scanner', () => {
     const firstCamera = fakeStream()
     const resumedCamera = fakeStream()
     const getUserMedia = vi.fn().mockResolvedValue(resumedCamera.stream)
-    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia, enumerateDevices: vi.fn().mockResolvedValue([]) } })
 
     render(<AttendanceScanner initialCameraStream={Promise.resolve(firstCamera.stream)} onClose={vi.fn()} />)
     await waitFor(() => expect(scanner.decode).toHaveBeenCalledTimes(1))
@@ -125,16 +125,39 @@ describe('Attendance scanner', () => {
     )
   })
 
-  it('identifies an Android camera-resource conflict instead of blaming permission', async () => {
+  it('shows the real camera error and retries an explicitly selected rear camera', async () => {
     vi.stubGlobal('fetch', vi.fn())
     const busyError = new DOMException('Could not start video source', 'NotReadableError')
+    const selectedStream = fakeStream()
+    const cameras = [
+      cameraDevice('front-id', 'Front Camera'),
+      cameraDevice('rear-id', 'Camera2 0, facing back'),
+    ]
+    const getUserMedia = vi.fn().mockResolvedValue(selectedStream.stream)
+    const enumerateDevices = vi.fn().mockResolvedValue(cameras)
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia, enumerateDevices } })
+    const user = userEvent.setup()
 
     render(<AttendanceScanner initialCameraStream={Promise.reject(busyError)} onClose={vi.fn()} />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The rear camera is busy or Android has not released it yet.',
+      'The selected camera could not be started.',
     )
-    expect(screen.getByRole('alert')).not.toHaveTextContent('Allow camera access')
+    expect(screen.getByRole('alert')).toHaveTextContent('NotReadableError: Could not start video source')
+    expect(await screen.findByRole('option', { name: 'Camera2 0, facing back' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toHaveValue('rear-id')
+
+    await user.click(screen.getByRole('button', { name: 'Try selected camera' }))
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledWith({
+      audio: false,
+      video: { deviceId: { exact: 'rear-id' } },
+    }))
+    await waitFor(() => expect(scanner.decode).toHaveBeenLastCalledWith(
+      selectedStream.stream,
+      expect.any(HTMLVideoElement),
+      expect.any(Function),
+    ))
   })
 })
 
@@ -158,4 +181,14 @@ function setDocumentVisibility(state: DocumentVisibilityState) {
     configurable: true,
     value: state,
   })
+}
+
+function cameraDevice(deviceId: string, label: string) {
+  return {
+    deviceId,
+    groupId: 'camera-group',
+    kind: 'videoinput',
+    label,
+    toJSON: () => ({}),
+  } as MediaDeviceInfo
 }
