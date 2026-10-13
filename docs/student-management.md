@@ -10,7 +10,8 @@ Students are added individually. Each student stores:
 - a globally unique nine-digit student number matching `^2[0-9]{8}$`;
 - full names in one field and surname in a separate field;
 - generated initials from every whitespace-separated full name;
-- a globally unique student email and optional globally unique personal email;
+- a student email derived as `{student number}@tut4life.ac.za` and an optional
+  globally unique personal email;
 - age group `C1` through `C5`;
 - gender `Male`, `Female` or `Other`; and
 - ethnicity `White`, `African`, `Coloured`, `Indian` or `Other`.
@@ -24,6 +25,11 @@ other punctuation are rejected.
 Student, personal and mentor login email addresses share one uniqueness
 boundary. Student numbers and mentor numbers also share one uniqueness boundary
 because both are stored on the same person identity table.
+
+The registration and editing forms display the derived student email as a
+read-only field and update it whenever the student number changes. The backend
+also rejects a mismatched student-email value so bypassing the browser cannot
+store an inconsistent address.
 
 ## Registration and onboarding
 

@@ -12,6 +12,12 @@ import type {
 } from './types'
 
 const pageSizes = [10, 20, 50, 100]
+const studentEmailDomain = '@tut4life.ac.za'
+
+function studentEmailFor(studentNumber: string) {
+  return studentNumber ? `${studentNumber}${studentEmailDomain}` : ''
+}
+
 const emptyStudent: StudentFormValues = {
   studentNumber: '',
   fullNames: '',
@@ -207,7 +213,10 @@ function StudentOnboarding({ onCancel, onSuccess, onError }: { onCancel: () => v
 }
 
 function StudentForm({ mode, initial, onCancel, onSuccess, onError }: { mode: 'create' | 'edit'; initial: StudentFormValues & { enrollmentId?: number }; onCancel: () => void; onSuccess: (message: string) => void; onError: (message: string) => void }) {
-  const [draft, setDraft] = useState<StudentFormValues>({ ...initial })
+  const [draft, setDraft] = useState<StudentFormValues>({
+    ...initial,
+    studentEmail: studentEmailFor(initial.studentNumber),
+  })
   const [saving, setSaving] = useState(false)
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -229,10 +238,10 @@ function StudentForm({ mode, initial, onCancel, onSuccess, onError }: { mode: 'c
     <form className="student-form" onSubmit={(event) => void submit(event)}>
       <div className="student-form-heading"><div><p className="form-kicker">{mode === 'create' ? 'New student' : 'Edit profile'}</p><h2>{mode === 'create' ? 'Registration details' : `${initial.fullNames} ${initial.surname}`}</h2></div><p className="form-note">Names accept letters, spaces, apostrophes and hyphens only.</p></div>
       <div className="form-grid student-form-grid">
-        <label className="field">Student number<input required inputMode="numeric" pattern="2[0-9]{8}" maxLength={9} value={draft.studentNumber} onChange={(event) => setDraft({ ...draft, studentNumber: event.target.value.replace(/\D/g, '').slice(0, 9) })} /></label>
+        <label className="field">Student number<input required inputMode="numeric" pattern="2[0-9]{8}" maxLength={9} value={draft.studentNumber} onChange={(event) => { const studentNumber = event.target.value.replace(/\D/g, '').slice(0, 9); setDraft({ ...draft, studentNumber, studentEmail: studentEmailFor(studentNumber) }) }} /></label>
         <label className="field field-wide">Full names<input required maxLength={100} value={draft.fullNames} onChange={(event) => setDraft({ ...draft, fullNames: event.target.value })} /></label>
         <label className="field">Surname<input required maxLength={100} value={draft.surname} onChange={(event) => setDraft({ ...draft, surname: event.target.value })} /></label>
-        <label className="field field-wide">Student email<input required type="email" maxLength={254} value={draft.studentEmail} onChange={(event) => setDraft({ ...draft, studentEmail: event.target.value })} /></label>
+        <label className="field field-wide">Student email<input required readOnly type="email" maxLength={254} value={draft.studentEmail} /><span className="form-note">Generated from the student number.</span></label>
         <label className="field field-wide">Personal email <span className="optional-label">Optional</span><input type="email" maxLength={254} value={draft.personalEmail ?? ''} onChange={(event) => setDraft({ ...draft, personalEmail: event.target.value || null })} /></label>
         <label className="field">Age group<select value={draft.ageGroup} onChange={(event) => setDraft({ ...draft, ageGroup: event.target.value as StudentAgeGroup })}>{([['C1', '16–18'], ['C2', '19–21'], ['C3', '22–24'], ['C4', '25–27'], ['C5', '28 and above']] as Array<[StudentAgeGroup, string]>).map(([value, label]) => <option key={value} value={value}>{value} ({label})</option>)}</select></label>
         <label className="field">Gender<select value={draft.gender} onChange={(event) => setDraft({ ...draft, gender: event.target.value as Gender })}>{(['Male', 'Female', 'Other'] as Gender[]).map((value) => <option key={value}>{value}</option>)}</select></label>
