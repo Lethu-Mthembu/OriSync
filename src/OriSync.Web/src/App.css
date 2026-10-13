@@ -269,6 +269,37 @@ h2 {
   align-items: center;
 }
 
+.student-heading-actions,
+.report-download-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.report-card {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.report-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.report-download-row {
+  justify-content: space-between;
+  border-top: 1px solid #dce4e8;
+  padding-top: 1rem;
+}
+
+.report-download-row p {
+  margin: 0;
+  color: #486472;
+  font-weight: 700;
+}
+
 .student-filters {
   grid-template-columns: minmax(14rem, 1fr) minmax(9rem, 12rem) minmax(7rem, 10rem);
 }
@@ -947,7 +978,8 @@ h2 {
   .invite-form,
   .directory-filters,
   .mentor-edit-grid,
-  .student-form-grid {
+  .student-form-grid,
+  .report-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1008,7 +1040,9 @@ h2 {
 
   .student-heading,
   .student-form-heading,
-  .lookup-result {
+  .lookup-result,
+  .student-heading-actions,
+  .report-download-row {
     align-items: stretch;
     flex-direction: column;
   }
