@@ -40,6 +40,11 @@ and next-day cross-group transfers that preserve the source group's daily
 attendance. The administrator receives a read-only, filterable student
 directory.
 
+Feature 7 adds deterministic, mentor-only student QR previews and PNG
+downloads. Each 1024 × 1024 image contains a signed URL plus the student's
+readable full name. Editing student details rotates the QR version, while a
+group move leaves the student's QR unchanged.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -143,3 +148,5 @@ See [mentor management](docs/mentor-management.md) for Feature 5 invitation,
 directory and account-lifecycle rules.
 See [student management](docs/student-management.md) for Feature 6 identity,
 onboarding, removal, transfer and concurrency rules.
+See [student QR codes](docs/student-qr-codes.md) for Feature 7 payload,
+signature, image and secret-management rules.

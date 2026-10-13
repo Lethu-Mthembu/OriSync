@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using OriSync.Api.Authentication;
+using OriSync.Api.StudentQrCodes;
 
 namespace OriSync.Api.StudentManagement;
 
@@ -47,6 +48,38 @@ public static class StudentManagementEndpoints
                 GetAccountId(principal),
                 enrollmentId,
                 cancellationToken)));
+
+        mentor.MapGet("/{enrollmentId:long}/qr", async (
+            long enrollmentId,
+            HttpContext context,
+            ClaimsPrincipal principal,
+            StudentQrCodeService service,
+            CancellationToken cancellationToken) =>
+        {
+            var document = await service.CreateAsync(
+                GetAccountId(principal),
+                enrollmentId,
+                cancellationToken);
+            PreventQrCaching(context.Response);
+            context.Response.Headers.ContentDisposition =
+                $"inline; filename=\"{document.FileName}\"";
+            return Results.File(document.Content, "image/png");
+        });
+
+        mentor.MapGet("/{enrollmentId:long}/qr/download", async (
+            long enrollmentId,
+            HttpContext context,
+            ClaimsPrincipal principal,
+            StudentQrCodeService service,
+            CancellationToken cancellationToken) =>
+        {
+            var document = await service.CreateAsync(
+                GetAccountId(principal),
+                enrollmentId,
+                cancellationToken);
+            PreventQrCaching(context.Response);
+            return Results.File(document.Content, "image/png", document.FileName);
+        });
 
         mentor.MapPost("", async (
             SaveStudentRequest request,
@@ -131,4 +164,10 @@ public static class StudentManagementEndpoints
                 StatusCodes.Status401Unauthorized,
                 "Authentication required.",
                 "The account session is invalid.");
+
+    private static void PreventQrCaching(HttpResponse response)
+    {
+        response.Headers.CacheControl = "private, no-store";
+        response.Headers.Pragma = "no-cache";
+    }
 }

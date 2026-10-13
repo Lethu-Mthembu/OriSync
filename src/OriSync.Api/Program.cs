@@ -13,6 +13,7 @@ using OriSync.Api.Health;
 using OriSync.Api.MentorManagement;
 using OriSync.Api.OrientationManagement;
 using OriSync.Api.StudentManagement;
+using OriSync.Api.StudentQrCodes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +48,9 @@ builder.Services.AddScoped<PasswordResetEmailOutboxProcessor>();
 builder.Services.AddScoped<OrientationManagementService>();
 builder.Services.AddScoped<MentorManagementService>();
 builder.Services.AddScoped<StudentManagementService>();
+builder.Services.AddScoped<StudentQrCodeService>();
+builder.Services.AddSingleton<StudentQrCodeTokenService>();
+builder.Services.AddSingleton<StudentQrCodeImageRenderer>();
 builder.Services.AddScoped<MentorInvitationEmailProcessor>();
 builder.Services.AddHostedService<PasswordResetEmailOutboxWorker>();
 builder.Services.AddHostedService<MentorInvitationEmailWorker>();
@@ -56,6 +60,8 @@ var resendOptions = builder.Services.AddOptions<ResendOptions>()
     .Bind(builder.Configuration.GetSection(ResendOptions.SectionName));
 var mentorInvitationOptions = builder.Services.AddOptions<MentorInvitationOptions>()
     .Bind(builder.Configuration.GetSection(MentorInvitationOptions.SectionName));
+var studentQrCodeOptions = builder.Services.AddOptions<StudentQrCodeOptions>()
+    .Bind(builder.Configuration.GetSection(StudentQrCodeOptions.SectionName));
 if (!builder.Environment.IsDevelopment())
 {
     passwordResetOptions
@@ -75,6 +81,14 @@ if (!builder.Environment.IsDevelopment())
             options => Uri.TryCreate(options.PublicBaseUrl, UriKind.Absolute, out var uri) &&
                 uri.Scheme == Uri.UriSchemeHttps,
             "MentorInvitations:PublicBaseUrl must be an absolute HTTPS URL.")
+        .ValidateOnStart();
+    studentQrCodeOptions
+        .Validate(
+            options => StudentQrCodeOptions.HasValidPublicBaseUrl(options.PublicBaseUrl),
+            "QrCodes:PublicBaseUrl must be an HTTPS origin without credentials, a path, a query or a fragment.")
+        .Validate(
+            options => StudentQrCodeOptions.HasValidSigningKey(options.SigningKey),
+            "QrCodes:SigningKey must be a Base64 value containing at least 32 bytes.")
         .ValidateOnStart();
 }
 builder.Services.AddHttpClient<IPasswordResetEmailSender, ResendPasswordResetEmailSender>(client =>
