@@ -16,3 +16,7 @@ services:
         value: "true"
       - key: MentorInvitations__PublicBaseUrl
         value: https://orisync-dev.onrender.com
+      - key: QrCodes__PublicBaseUrl
+        value: https://orisync-dev.onrender.com
+      - key: QrCodes__SigningKey
+        generateValue: true

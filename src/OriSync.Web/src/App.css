@@ -404,6 +404,46 @@ h2 {
   font-weight: 700;
 }
 
+.qr-dialog-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(10 34 51 / 72%);
+}
+
+.qr-dialog {
+  width: min(34rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  border-radius: 0.6rem;
+  padding: 1.25rem;
+  background: #fff;
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 30%);
+}
+
+.qr-dialog-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.qr-dialog-heading h2 {
+  margin: 0;
+  color: #18364d;
+}
+
+.qr-dialog img {
+  display: block;
+  width: min(100%, 28rem);
+  height: auto;
+  margin: 1rem auto;
+  border: 1px solid #dce4e8;
+}
+
 .status-delivery-failed,
 .status-expired,
 .status-cancelled,

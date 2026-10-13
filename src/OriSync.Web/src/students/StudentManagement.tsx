@@ -33,6 +33,9 @@ export function StudentManagement() {
   const [notice, setNotice] = useState('')
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<StudentDirectoryItem | null>(null)
+  const [qrStudent, setQrStudent] = useState<StudentDirectoryItem | null>(null)
+  const [qrImageUrl, setQrImageUrl] = useState('')
+  const [qrLoading, setQrLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -58,6 +61,10 @@ export function StudentManagement() {
     return () => window.clearTimeout(task)
   }, [load])
 
+  useEffect(() => () => {
+    if (qrImageUrl) URL.revokeObjectURL(qrImageUrl)
+  }, [qrImageUrl])
+
   async function remove(student: StudentDirectoryItem) {
     if (!window.confirm(`Remove ${student.fullNames} ${student.surname} from ${student.groupName} Group?`)) return
     const response = await sendJson(`/api/mentor/students/${student.enrollmentId}/remove`, 'POST')
@@ -76,6 +83,58 @@ export function StudentManagement() {
     void load()
   }
 
+  async function showQr(student: StudentDirectoryItem) {
+    if (qrImageUrl) URL.revokeObjectURL(qrImageUrl)
+    setQrImageUrl('')
+    setQrStudent(student)
+    setQrLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/mentor/students/${student.enrollmentId}/qr`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+      if (!response.ok) throw new Error(await getError(response))
+      setQrImageUrl(URL.createObjectURL(await response.blob()))
+    } catch (reason) {
+      setQrStudent(null)
+      setError(reason instanceof Error ? reason.message : 'The QR code could not be loaded.')
+    } finally {
+      setQrLoading(false)
+    }
+  }
+
+  async function downloadQr() {
+    if (!qrStudent) return
+    setQrLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/mentor/students/${qrStudent.enrollmentId}/qr/download`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+      if (!response.ok) throw new Error(await getError(response))
+      const objectUrl = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = `${qrStudent.studentNumber}-qr.png`
+      document.body.append(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The QR code could not be downloaded.')
+    } finally {
+      setQrLoading(false)
+    }
+  }
+
+  function closeQr() {
+    if (qrImageUrl) URL.revokeObjectURL(qrImageUrl)
+    setQrImageUrl('')
+    setQrStudent(null)
+  }
+
   return (
     <main className="settings-workspace student-workspace">
       <header className="settings-heading student-heading">
@@ -87,6 +146,7 @@ export function StudentManagement() {
       {notice && <p className="success-message" role="status">{notice}</p>}
       {adding && <StudentOnboarding onCancel={() => setAdding(false)} onSuccess={success} onError={setError} />}
       {editing && <StudentForm mode="edit" initial={editing} onCancel={() => setEditing(null)} onSuccess={success} onError={setError} />}
+      {qrStudent && <QrCodeDialog student={qrStudent} imageUrl={qrImageUrl} loading={qrLoading} onClose={closeQr} onDownload={() => void downloadQr()} />}
 
       <section className="settings-card directory-card">
         <div className="directory-filters student-filters">
@@ -96,8 +156,8 @@ export function StudentManagement() {
 
         {loading ? <p className="empty-state">Loading students…</p> : directory && directory.items.length > 0 ? (
           <>
-            <div className="table-scroll student-desktop-directory"><table className="directory-table student-table"><thead><tr><th>Student</th><th>Number</th><th>Demographics</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((student) => <StudentRow key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} />)}</tbody></table></div>
-            <div className="student-mobile-directory">{directory.items.map((student) => <StudentCard key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} />)}</div>
+            <div className="table-scroll student-desktop-directory"><table className="directory-table student-table"><thead><tr><th>Student</th><th>Number</th><th>Demographics</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((student) => <StudentRow key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} />)}</tbody></table></div>
+            <div className="student-mobile-directory">{directory.items.map((student) => <StudentCard key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} />)}</div>
           </>
         ) : <p className="empty-state">No students match this search.</p>}
 
@@ -183,19 +243,23 @@ function StudentForm({ mode, initial, onCancel, onSuccess, onError }: { mode: 'c
   )
 }
 
-function StudentRow({ student, onEdit, onRemove }: StudentActions) {
-  return <tr><td><strong>{student.initials} {student.surname}</strong><small>{student.fullNames}</small><small>{student.studentEmail}</small></td><td>{student.studentNumber}</td><td>{student.ageGroup} · {student.gender}<small>{student.ethnicity}</small></td><td><Attendance student={student} /></td><td><Actions student={student} onEdit={onEdit} onRemove={onRemove} /></td></tr>
+function StudentRow({ student, onEdit, onRemove, onQr }: StudentActions) {
+  return <tr><td><strong>{student.initials} {student.surname}</strong><small>{student.fullNames}</small><small>{student.studentEmail}</small></td><td>{student.studentNumber}</td><td>{student.ageGroup} · {student.gender}<small>{student.ethnicity}</small></td><td><Attendance student={student} /></td><td><Actions student={student} onEdit={onEdit} onRemove={onRemove} onQr={onQr} /></td></tr>
 }
 
-function StudentCard({ student, onEdit, onRemove }: StudentActions) {
-  return <article className="student-card"><div className="student-card-heading"><div><h2>{student.initials} {student.surname}</h2><p>{student.fullNames}</p></div><Attendance student={student} /></div><dl><div><dt>Student number</dt><dd>{student.studentNumber}</dd></div><div><dt>Age group</dt><dd>{student.ageGroup}</dd></div><div><dt>Gender</dt><dd>{student.gender}</dd></div><div><dt>Ethnicity</dt><dd>{student.ethnicity}</dd></div></dl><p className="student-email">{student.studentEmail}</p><Actions student={student} onEdit={onEdit} onRemove={onRemove} /></article>
+function StudentCard({ student, onEdit, onRemove, onQr }: StudentActions) {
+  return <article className="student-card"><div className="student-card-heading"><div><h2>{student.initials} {student.surname}</h2><p>{student.fullNames}</p></div><Attendance student={student} /></div><dl><div><dt>Student number</dt><dd>{student.studentNumber}</dd></div><div><dt>Age group</dt><dd>{student.ageGroup}</dd></div><div><dt>Gender</dt><dd>{student.gender}</dd></div><div><dt>Ethnicity</dt><dd>{student.ethnicity}</dd></div></dl><p className="student-email">{student.studentEmail}</p><Actions student={student} onEdit={onEdit} onRemove={onRemove} onQr={onQr} /></article>
 }
 
 function Attendance({ student }: { student: StudentDirectoryItem }) {
   return <><span className={`status-badge attendance-${student.attendanceStatus === '—' ? 'pending' : student.attendanceStatus.toLowerCase()}`}>{student.attendanceStatus}</span>{student.isIncomingTransfer && <small>Effective {student.groupEffectiveDate}</small>}</>
 }
 
-interface StudentActions { student: StudentDirectoryItem; onEdit: (student: StudentDirectoryItem) => void; onRemove: (student: StudentDirectoryItem) => void }
-function Actions({ student, onEdit, onRemove }: StudentActions) {
-  return <div className="row-actions"><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onEdit(student)}>Edit</button><button className="danger-text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onRemove(student)}>Remove</button>{student.isIncomingTransfer && <small>Available tomorrow</small>}</div>
+interface StudentActions { student: StudentDirectoryItem; onEdit: (student: StudentDirectoryItem) => void; onRemove: (student: StudentDirectoryItem) => void; onQr: (student: StudentDirectoryItem) => void }
+function Actions({ student, onEdit, onRemove, onQr }: StudentActions) {
+  return <div className="row-actions"><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onQr(student)}>QR code</button><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onEdit(student)}>Edit</button><button className="danger-text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onRemove(student)}>Remove</button>{student.isIncomingTransfer && <small>Available tomorrow</small>}</div>
+}
+
+function QrCodeDialog({ student, imageUrl, loading, onClose, onDownload }: { student: StudentDirectoryItem; imageUrl: string; loading: boolean; onClose: () => void; onDownload: () => void }) {
+  return <div className="qr-dialog-backdrop" role="presentation"><section className="qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-dialog-title"><div className="qr-dialog-heading"><div><p className="form-kicker">Student QR code</p><h2 id="qr-dialog-title">{student.fullNames} {student.surname}</h2></div><button className="secondary-button" type="button" onClick={onClose}>Close</button></div>{imageUrl ? <img src={imageUrl} alt={`QR code for ${student.fullNames} ${student.surname}`} /> : <p className="empty-state">Loading QR code…</p>}<p className="form-note">This QR remains valid until the student details are changed.</p><button className="primary-button" disabled={loading || !imageUrl} type="button" onClick={onDownload}>{loading ? 'Preparing…' : 'Download PNG'}</button></section></div>
 }

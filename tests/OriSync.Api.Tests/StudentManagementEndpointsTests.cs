@@ -12,7 +12,11 @@ using OriSync.Api.Authentication;
 using OriSync.Api.Data;
 using OriSync.Api.Domain;
 using OriSync.Api.StudentManagement;
+using OriSync.Api.StudentQrCodes;
+using SkiaSharp;
 using Testcontainers.PostgreSql;
+using ZXing;
+using ZXing.Common;
 
 namespace OriSync.Api.Tests;
 
@@ -209,6 +213,114 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
         Assert.Equal(2, updated.Student.QrVersion);
         Assert.Equal("JM", updated.Student.Initials);
         Assert.Equal("Doe-Smith", updated.Student.Surname);
+    }
+
+    [Fact]
+    public async Task MentorCanDownloadDeterministicScannableQrForCurrentGroupOnly()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var createdResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane Mary", "Doe"));
+        var created = (await createdResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        var path = $"/api/mentor/students/{created.Student.EnrollmentId}/qr";
+
+        var first = await red.GetAsync(path);
+        var second = await red.GetAsync(path);
+        first.EnsureSuccessStatusCode();
+        second.EnsureSuccessStatusCode();
+        Assert.Equal("image/png", first.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("no-store", first.Headers.CacheControl?.ToString());
+        Assert.Equal("inline", first.Content.Headers.ContentDisposition?.DispositionType);
+        var firstBytes = await first.Content.ReadAsByteArrayAsync();
+        Assert.Equal(firstBytes, await second.Content.ReadAsByteArrayAsync());
+
+        using var bitmap = SKBitmap.Decode(firstBytes);
+        Assert.NotNull(bitmap);
+        Assert.Equal(1024, bitmap.Width);
+        Assert.Equal(1024, bitmap.Height);
+        var reader = new BarcodeReaderGeneric
+        {
+            Options = new DecodingOptions { TryHarder = true }
+        };
+        var decoded = reader.Decode(new RGBLuminanceSource(
+            bitmap.Bytes,
+            bitmap.Width,
+            bitmap.Height,
+            RGBLuminanceSource.BitmapFormat.BGRA32));
+        Assert.NotNull(decoded);
+        var uri = new Uri(decoded.Text);
+        Assert.Empty(uri.Query);
+        Assert.StartsWith("#payload=", uri.Fragment, StringComparison.Ordinal);
+        Assert.DoesNotContain("personal.test", decoded.Text, StringComparison.Ordinal);
+
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var tokens = scope.ServiceProvider.GetRequiredService<StudentQrCodeTokenService>();
+            Assert.True(tokens.TryValidate(decoded.Text, out var payload));
+            Assert.NotNull(payload);
+            Assert.Equal("223456789", payload.StudentNumber);
+            Assert.Equal("Jane Mary", payload.FullNames);
+            Assert.Equal("Doe", payload.Surname);
+            Assert.Equal("223456789@student.tut.test", payload.StudentEmail);
+            Assert.Equal(1, payload.Version);
+            var tampered = decoded.Text.EndsWith('A')
+                ? $"{decoded.Text[..^1]}B"
+                : $"{decoded.Text[..^1]}A";
+            Assert.False(tokens.TryValidate(tampered, out _));
+            Assert.False(tokens.TryValidate(
+                $"{decoded.Text}&payload=duplicate",
+                out _));
+        }
+
+        var download = await red.GetAsync($"{path}/download");
+        download.EnsureSuccessStatusCode();
+        Assert.Equal("attachment", download.Content.Headers.ContentDisposition?.DispositionType);
+        Assert.Equal("223456789-qr.png", download.Content.Headers.ContentDisposition?.FileNameStar);
+
+        using var blue = await CreateMentorClientAsync("blue.mentor@orisync.test");
+        Assert.Equal(HttpStatusCode.NotFound, (await blue.GetAsync(path)).StatusCode);
+        using var anonymous = CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+    }
+
+    [Fact]
+    public async Task StudentDetailEditCreatesReplacementQrButGroupMovementDoesNotChangeVersion()
+    {
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var createdResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane Mary", "Doe"));
+        var created = (await createdResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        var qrPath = $"/api/mentor/students/{created.Student.EnrollmentId}/qr";
+        var original = await red.GetByteArrayAsync(qrPath);
+
+        var updatedResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Put,
+            $"/api/mentor/students/{created.Student.EnrollmentId}",
+            Student("223456789", "Jane Marie", "Doe"));
+        var updated = (await updatedResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        Assert.Equal(2, updated.Student.QrVersion);
+        Assert.NotEqual(original, await red.GetByteArrayAsync(qrPath));
+
+        await SendJsonAsync(
+            red,
+            HttpMethod.Post,
+            $"/api/mentor/students/{created.Student.EnrollmentId}/remove");
+        using var blue = await CreateMentorClientAsync("blue.mentor@orisync.test");
+        var movedResponse = await SendJsonAsync(
+            blue,
+            HttpMethod.Post,
+            "/api/mentor/students/onboard",
+            new OnboardExistingStudentRequest("223456789"));
+        var moved = (await movedResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        Assert.Equal(2, moved.Student.QrVersion);
+        Assert.Equal(HttpStatusCode.NotFound, (await blue.GetAsync(qrPath)).StatusCode);
     }
 
     [Fact]
