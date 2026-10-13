@@ -4,6 +4,7 @@ using System.Net.Mail;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using OriSync.Api.Attendance;
 using OriSync.Api.Authentication;
 using OriSync.Api.Data;
 using OriSync.Api.Domain;
@@ -12,7 +13,8 @@ namespace OriSync.Api.StudentManagement;
 
 public sealed partial class StudentManagementService(
     OriSyncDbContext dbContext,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    DailyAttendanceMaterializer attendanceMaterializer)
 {
     private static readonly int[] AllowedPageSizes = [10, 20, 50, 100];
     private const string StudentEmailDomain = "@tut4life.ac.za";
@@ -27,6 +29,14 @@ public sealed partial class StudentManagementService(
         ValidatePaging(page, pageSize);
         var context = await GetMentorContextAsync(accountId, cancellationToken);
         await ReconcileTransfersAsync(context.Orientation.Id, context.LocalDate, cancellationToken);
+        if (IsOrientationDay(context.Orientation, context.LocalDate))
+        {
+            await attendanceMaterializer.EnsureGroupAsync(
+                context.Orientation.Id,
+                context.Group.Id,
+                context.LocalDate,
+                cancellationToken);
+        }
 
         var query = DirectoryQuery(context.Orientation.Id, context.LocalDate)
             .Where(item =>
@@ -55,6 +65,13 @@ public sealed partial class StudentManagementService(
 
         var localDate = GetLocalDateTime(orientation).Date;
         await ReconcileTransfersAsync(orientation.Id, localDate, cancellationToken);
+        if (IsOrientationDay(orientation, localDate))
+        {
+            await attendanceMaterializer.EnsureOrientationAsync(
+                orientation.Id,
+                localDate,
+                cancellationToken);
+        }
         var query = DirectoryQuery(orientation.Id, localDate);
         if (unassigned)
         {

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OriSync.Api.Attendance;
 using OriSync.Api.Authentication;
 using OriSync.Api.Data;
 using OriSync.Api.Domain;
@@ -143,6 +144,158 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
             "Student email must be 223456789@tut4life.ac.za.",
             await response.Content.ReadAsStringAsync(),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DirectoryMaterializesTodaysDefaultAbsentRow()
+    {
+        var enrollmentId = await AddStudentWithoutAttendanceAsync(
+            _redGroupId,
+            "223456789",
+            "Jane",
+            "Doe");
+        using var mentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+
+        var directory = await mentor.GetFromJsonAsync<StudentDirectoryResponse>(
+            "/api/mentor/students?page=1&pageSize=10",
+            JsonOptions);
+
+        Assert.NotNull(directory);
+        Assert.Equal("Absent", Assert.Single(directory.Items).AttendanceStatus);
+        await using var scope = _factory!.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+        var attendance = await dbContext.AttendanceRecords.SingleAsync(
+            item => item.StudentEnrollmentId == enrollmentId);
+        Assert.Equal(AttendanceStatus.Absent, attendance.Status);
+        Assert.Equal(AttendanceCaptureMethod.Automatic, attendance.CaptureMethod);
+        Assert.Equal(_redGroupId, attendance.GroupId);
+        Assert.Null(attendance.MarkedByAccountId);
+    }
+
+    [Fact]
+    public async Task QrScanMarksPresentAndThenReturnsDuplicateWarning()
+    {
+        var enrollmentId = await AddStudentWithoutAttendanceAsync(
+            _redGroupId,
+            "223456789",
+            "Jane Mary",
+            "Doe");
+        var qrUrl = CreateQrUrl("223456789", "Jane Mary", "Doe", 1);
+        using var mentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+
+        var markedResponse = await SendJsonAsync(
+            mentor,
+            HttpMethod.Post,
+            "/api/mentor/attendance/scan",
+            new ScanAttendanceRequest(qrUrl));
+        markedResponse.EnsureSuccessStatusCode();
+        var marked = await markedResponse.Content.ReadFromJsonAsync<AttendanceMutationResponse>(JsonOptions);
+        Assert.NotNull(marked);
+        Assert.Equal("MarkedPresent", marked.Outcome);
+        Assert.Equal(AttendanceStatus.Present, marked.Status);
+        Assert.Equal("Jane Mary Doe was marked Present.", marked.Message);
+
+        var duplicateResponse = await SendJsonAsync(
+            mentor,
+            HttpMethod.Post,
+            "/api/mentor/attendance/scan",
+            new ScanAttendanceRequest(qrUrl));
+        duplicateResponse.EnsureSuccessStatusCode();
+        var duplicate = await duplicateResponse.Content.ReadFromJsonAsync<AttendanceMutationResponse>(JsonOptions);
+        Assert.NotNull(duplicate);
+        Assert.Equal("AlreadyPresent", duplicate.Outcome);
+
+        await using var scope = _factory!.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+        var attendance = await dbContext.AttendanceRecords.SingleAsync(
+            item => item.StudentEnrollmentId == enrollmentId);
+        Assert.Equal(AttendanceStatus.Present, attendance.Status);
+        Assert.Equal(AttendanceCaptureMethod.Qr, attendance.CaptureMethod);
+        Assert.NotNull(attendance.MarkedByAccountId);
+    }
+
+    [Fact]
+    public async Task QrScanRejectsExpiredInvalidWrongGroupAndClosedAttendance()
+    {
+        await AddStudentWithoutAttendanceAsync(_redGroupId, "223456789", "Jane", "Doe", qrVersion: 2);
+        await AddStudentWithoutAttendanceAsync(_blueGroupId, "223456788", "John", "Smith");
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+
+        await AssertAttendanceProblemAsync(
+            await SendJsonAsync(
+                red,
+                HttpMethod.Post,
+                "/api/mentor/attendance/scan",
+                new ScanAttendanceRequest(CreateQrUrl("223456789", "Jane", "Doe", 1))),
+            HttpStatusCode.Conflict,
+            "ExpiredQr");
+        await AssertAttendanceProblemAsync(
+            await SendJsonAsync(
+                red,
+                HttpMethod.Post,
+                "/api/mentor/attendance/scan",
+                new ScanAttendanceRequest("https://example.test/not-an-orisync-code")),
+            HttpStatusCode.BadRequest,
+            "InvalidQr");
+        await AssertAttendanceProblemAsync(
+            await SendJsonAsync(
+                red,
+                HttpMethod.Post,
+                "/api/mentor/attendance/scan",
+                new ScanAttendanceRequest(CreateQrUrl("223456788", "John", "Smith", 1))),
+            HttpStatusCode.Conflict,
+            "WrongGroup");
+
+        _time.SetUtcNow(new DateTimeOffset(2027, 2, 1, 13, 31, 0, TimeSpan.Zero));
+        using var afterHours = await CreateMentorClientAsync("red.mentor@orisync.test");
+        await AssertAttendanceProblemAsync(
+            await SendJsonAsync(
+                afterHours,
+                HttpMethod.Post,
+                "/api/mentor/attendance/scan",
+                new ScanAttendanceRequest(CreateQrUrl("223456789", "Jane", "Doe", 2))),
+            HttpStatusCode.Conflict,
+            "AttendanceClosed");
+    }
+
+    [Fact]
+    public async Task ManualCorrectionUsesLastSubmissionAndEnforcesMentorGroup()
+    {
+        var enrollmentId = await AddStudentWithoutAttendanceAsync(
+            _redGroupId,
+            "223456789",
+            "Jane",
+            "Doe");
+        using var red = await CreateMentorClientAsync("red.mentor@orisync.test");
+
+        (await SendJsonAsync(
+            red,
+            HttpMethod.Put,
+            $"/api/mentor/attendance/{enrollmentId}",
+            new CorrectAttendanceRequest(AttendanceStatus.Present))).EnsureSuccessStatusCode();
+        var absentResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Put,
+            $"/api/mentor/attendance/{enrollmentId}",
+            new CorrectAttendanceRequest(AttendanceStatus.Absent));
+        absentResponse.EnsureSuccessStatusCode();
+        var absent = await absentResponse.Content.ReadFromJsonAsync<AttendanceMutationResponse>(JsonOptions);
+        Assert.Equal(AttendanceStatus.Absent, absent!.Status);
+
+        using var blue = await CreateMentorClientAsync("blue.mentor@orisync.test");
+        var forbidden = await SendJsonAsync(
+            blue,
+            HttpMethod.Put,
+            $"/api/mentor/attendance/{enrollmentId}",
+            new CorrectAttendanceRequest(AttendanceStatus.Present));
+        Assert.Equal(HttpStatusCode.NotFound, forbidden.StatusCode);
+
+        await using var scope = _factory!.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+        var attendance = await dbContext.AttendanceRecords.SingleAsync(
+            item => item.StudentEnrollmentId == enrollmentId);
+        Assert.Equal(AttendanceStatus.Absent, attendance.Status);
+        Assert.Equal(AttendanceCaptureMethod.Manual, attendance.CaptureMethod);
     }
 
     [Fact]
@@ -417,6 +570,74 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
             StudentAgeGroup.C2,
             Gender.Female,
             Ethnicity.African);
+
+    private async Task<long> AddStudentWithoutAttendanceAsync(
+        long groupId,
+        string number,
+        string fullNames,
+        string surname,
+        int qrVersion = 1)
+    {
+        await using var scope = _factory!.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+        var group = await dbContext.Groups.SingleAsync(item => item.Id == groupId);
+        var now = _time.GetUtcNow();
+        var person = new Person
+        {
+            PersonType = PersonType.Student,
+            InstitutionNumber = number,
+            FirstName = fullNames,
+            Surname = surname,
+            Initials = string.Concat(fullNames.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(item => item[0])),
+            AgeGroup = StudentAgeGroup.C2,
+            Gender = Gender.Female,
+            Ethnicity = Ethnicity.African,
+            CreatedAt = now
+        };
+        person.Emails.Add(new PersonEmail
+        {
+            EmailType = EmailType.Student,
+            Email = $"{number}@tut4life.ac.za",
+            NormalizedEmail = $"{number}@tut4life.ac.za",
+            CreatedAt = now
+        });
+        var enrollment = new StudentEnrollment
+        {
+            OrientationId = group.OrientationId,
+            Student = person,
+            CurrentGroupId = group.Id,
+            QrVersion = qrVersion,
+            EnrolledAt = now
+        };
+        dbContext.StudentEnrollments.Add(enrollment);
+        await dbContext.SaveChangesAsync();
+        return enrollment.Id;
+    }
+
+    private string CreateQrUrl(
+        string studentNumber,
+        string fullNames,
+        string surname,
+        int version)
+    {
+        var tokenService = _factory!.Services.GetRequiredService<StudentQrCodeTokenService>();
+        return tokenService.Create(new StudentQrCodePayload(
+            studentNumber,
+            fullNames,
+            surname,
+            $"{studentNumber}@tut4life.ac.za",
+            version)).Url;
+    }
+
+    private static async Task AssertAttendanceProblemAsync(
+        HttpResponseMessage response,
+        HttpStatusCode expectedStatus,
+        string expectedCode)
+    {
+        Assert.Equal(expectedStatus, response.StatusCode);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(expectedCode, problem.RootElement.GetProperty("code").GetString());
+    }
 
     private static async Task<HttpResponseMessage> SendJsonAsync(
         HttpClient client,

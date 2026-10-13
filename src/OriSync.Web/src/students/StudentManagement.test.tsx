@@ -109,6 +109,62 @@ describe('Student management', () => {
     expect(screen.getAllByRole('button', { name: 'Remove' }).every((button) => button.hasAttribute('disabled'))).toBe(true)
   })
 
+  it('confirms and immediately applies a manual attendance correction', async () => {
+    const student = {
+      enrollmentId: 7,
+      studentNumber: '223456789',
+      fullNames: 'Jane Mary',
+      surname: 'Doe',
+      initials: 'JM',
+      studentEmail: '223456789@tut4life.ac.za',
+      personalEmail: null,
+      ageGroup: 'C2',
+      gender: 'Female',
+      ethnicity: 'African',
+      groupId: 5,
+      groupName: 'BLUE',
+      groupBadgeColor: '#1565C0',
+      attendanceStatus: 'Absent',
+      isIncomingTransfer: false,
+      groupEffectiveDate: null,
+      qrVersion: 1,
+    }
+    const requests: Array<{ path: string; init?: RequestInit }> = []
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      requests.push({ path, init })
+      if (path.startsWith('/api/mentor/students?')) return response({
+        ...emptyDirectory,
+        totalItems: 1,
+        totalPages: 1,
+        items: [student],
+      })
+      if (path === '/api/auth/csrf') return response({ requestToken: 'csrf-token' })
+      if (path === '/api/mentor/attendance/7') return response({
+        outcome: 'Corrected',
+        enrollmentId: 7,
+        studentNumber: student.studentNumber,
+        fullNames: student.fullNames,
+        surname: student.surname,
+        status: 'Present',
+        message: 'Jane Mary Doe was marked Present.',
+      })
+      throw new Error(`Unexpected request: ${path}`)
+    }))
+    const user = userEvent.setup()
+
+    render(<StudentManagement />)
+    await screen.findAllByText('Jane Mary')
+    await user.click(screen.getAllByRole('button', { name: 'Mark Present' })[0])
+
+    expect(window.confirm).toHaveBeenCalledWith('Mark Jane Mary Doe as Present?')
+    expect(await screen.findByText('Jane Mary Doe was marked Present.')).toBeInTheDocument()
+    expect(requests.find((item) => item.path === '/api/mentor/attendance/7')?.init?.body)
+      .toBe(JSON.stringify({ status: 'Present' }))
+    expect(screen.getAllByRole('button', { name: 'Mark Present' }).every((button) => button.hasAttribute('disabled'))).toBe(true)
+  })
+
   it('previews and downloads a current-group student QR code', async () => {
     const paths: string[] = []
     const student = {

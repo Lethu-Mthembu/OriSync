@@ -1,0 +1,125 @@
+.attendance-scanner {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 360px;
+  color: #fff;
+  background: #07141d;
+}
+
+.scanner-heading {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem clamp(1rem, 4vw, 2rem);
+  background: rgb(7 20 29 / 92%);
+}
+
+.scanner-heading h1,
+.scanner-heading p {
+  margin: 0;
+}
+
+.scanner-close {
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 0.25rem;
+  padding: 0.65rem 0.85rem;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.scanner-view {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.scanner-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(70vw, 22rem);
+  aspect-ratio: 1;
+  border: 4px solid #fff;
+  border-radius: 1rem;
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 45%);
+  transform: translate(-50%, -55%);
+}
+
+.scanner-instruction {
+  position: absolute;
+  right: 1rem;
+  bottom: 1.5rem;
+  left: 1rem;
+  margin: 0;
+  font-weight: 750;
+  text-align: center;
+  text-shadow: 0 1px 4px #000;
+}
+
+.scanner-processing,
+.scanner-camera-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(80vw, 24rem);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  text-align: center;
+  background: rgb(7 20 29 / 92%);
+  transform: translate(-50%, -50%);
+}
+
+.scanner-result-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 70%);
+}
+
+.scanner-result {
+  width: min(100%, 28rem);
+  border-top: 0.45rem solid #005596;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  color: #18364d;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+}
+
+.scanner-result-success {
+  border-color: #20814d;
+}
+
+.scanner-result-warning {
+  border-color: #d89a16;
+}
+
+.scanner-result-error {
+  border-color: #b4232c;
+}
+
+.scanner-result h2 {
+  margin-top: 0;
+}
+
+.scanner-countdown {
+  color: #607985;
+  font-size: 0.9rem;
+}

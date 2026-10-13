@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OriSync.Api.Attendance;
 using OriSync.Api.Authentication;
 using OriSync.Api.Data;
 using OriSync.Api.Domain;
@@ -48,6 +49,8 @@ builder.Services.AddScoped<PasswordResetEmailOutboxProcessor>();
 builder.Services.AddScoped<OrientationManagementService>();
 builder.Services.AddScoped<MentorManagementService>();
 builder.Services.AddScoped<StudentManagementService>();
+builder.Services.AddScoped<AttendanceService>();
+builder.Services.AddScoped<DailyAttendanceMaterializer>();
 builder.Services.AddScoped<StudentQrCodeService>();
 builder.Services.AddSingleton<StudentQrCodeTokenService>();
 builder.Services.AddSingleton<StudentQrCodeImageRenderer>();
@@ -208,7 +211,18 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        // Vite fingerprints assets by content. They can therefore be cached
+        // permanently without serving stale scanner code after a deployment.
+        if (context.Context.Request.Path.StartsWithSegments("/assets"))
+        {
+            context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+        }
+    }
+});
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
@@ -233,6 +247,7 @@ app.MapAuthenticationEndpoints();
 app.MapOrientationManagementEndpoints();
 app.MapMentorManagementEndpoints();
 app.MapStudentManagementEndpoints();
+app.MapAttendanceEndpoints();
 
 app.MapFallbackToFile("index.html");
 

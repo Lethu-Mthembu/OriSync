@@ -805,6 +805,23 @@ h2 {
   color: #005596;
 }
 
+.attendance-action {
+  border: 1px solid #005596;
+  border-radius: 0.25rem;
+  padding: 0.45rem 0.6rem;
+  color: #005596;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.attendance-action:disabled {
+  border-color: #c8d2d8;
+  color: #81929b;
+  background: #eef2f4;
+  cursor: not-allowed;
+}
+
 .danger-text-button {
   color: #a22228;
 }
