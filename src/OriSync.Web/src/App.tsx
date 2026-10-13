@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import './App.css'
 import {
   AdminRecoveryForm,
@@ -9,11 +9,28 @@ import {
 import { postJson } from './auth/api'
 import type { AuthView, Session } from './auth/types'
 import { useSessionActivity } from './auth/useSessionActivity'
+import { requestRearCamera } from './attendance/camera'
 import { MentorActivation } from './mentors/MentorActivation'
 import { MentorManagement } from './mentors/MentorManagement'
 import { OrientationSettings } from './orientation/OrientationSettings'
 import { AdminStudentDirectory } from './students/AdminStudentDirectory'
 import { StudentManagement } from './students/StudentManagement'
+
+let attendanceScannerModule: ReturnType<typeof importAttendanceScanner> | null = null
+
+function importAttendanceScanner() {
+  return import('./attendance/AttendanceScanner')
+}
+
+function preloadAttendanceScanner() {
+  attendanceScannerModule ??= importAttendanceScanner()
+  return attendanceScannerModule
+}
+
+const AttendanceScanner = lazy(async () => {
+  const module = await preloadAttendanceScanner()
+  return { default: module.AttendanceScanner }
+})
 
 function App() {
   const [activation] = useState(() => readActivationLink())
@@ -166,10 +183,44 @@ function AdminWorkspace({ session, onChangePassword, onLogout }: { session: Sess
 }
 
 function MentorWorkspace({ session, onChangePassword, onLogout }: { session: Session; onChangePassword: () => void; onLogout: () => void }) {
+  const [section, setSection] = useState<'students' | 'scanner'>('students')
+  const [initialCameraStream, setInitialCameraStream] = useState<Promise<MediaStream> | null>(null)
+
+  useEffect(() => {
+    if (session.groupId === null) return
+
+    const idleWindow = window as unknown as {
+      requestIdleCallback?: (callback: IdleRequestCallback) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+      const task = idleWindow.requestIdleCallback(() => void preloadAttendanceScanner())
+      return () => idleWindow.cancelIdleCallback?.(task)
+    }
+
+    const task = globalThis.setTimeout(() => void preloadAttendanceScanner(), 1500)
+    return () => globalThis.clearTimeout(task)
+  }, [session.groupId])
+
+  function openScanner() {
+    const camera = requestRearCamera()
+    // The scanner renders its own permission error. Attach a handler now so a
+    // fast rejection cannot become an unhandled promise while the chunk loads.
+    void camera.catch(() => undefined)
+    setInitialCameraStream(camera)
+    void preloadAttendanceScanner()
+    setSection('scanner')
+  }
+
+  if (section === 'scanner') {
+    return <Suspense fallback={<main className="loading-panel">Loading scanner…</main>}><AttendanceScanner initialCameraStream={initialCameraStream!} onClose={() => { setInitialCameraStream(null); setSection('students') }} /></Suspense>
+  }
+
   return (
     <>
       <div className="account-toolbar mentor-toolbar">
         <span>{session.firstName} {session.surname}</span>
+        {session.groupId !== null && <button className="primary-button" type="button" onPointerEnter={() => void preloadAttendanceScanner()} onTouchStart={() => void preloadAttendanceScanner()} onFocus={() => void preloadAttendanceScanner()} onClick={openScanner}>Scan attendance</button>}
         <button className="secondary-button" type="button" onClick={onChangePassword}>Change password</button>
         <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
       </div>

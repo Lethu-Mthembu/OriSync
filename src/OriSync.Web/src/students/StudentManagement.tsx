@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { getError, sendJson } from '../auth/api'
+import type { AttendanceMutationResponse, AttendanceStatus } from '../attendance/types'
 import type {
   Ethnicity,
   Gender,
@@ -43,8 +44,8 @@ export function StudentManagement() {
   const [qrImageUrl, setQrImageUrl] = useState('')
   const [qrLoading, setQrLoading] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
     setError('')
     const values = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
     if (search.trim()) values.set('search', search.trim())
@@ -58,13 +59,17 @@ export function StudentManagement() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Students could not be loaded.')
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }, [page, pageSize, search])
 
   useEffect(() => {
     const task = window.setTimeout(() => void load(), 0)
-    return () => window.clearTimeout(task)
+    const refresh = window.setInterval(() => void load(false), 15000)
+    return () => {
+      window.clearTimeout(task)
+      window.clearInterval(refresh)
+    }
   }, [load])
 
   useEffect(() => () => {
@@ -79,14 +84,33 @@ export function StudentManagement() {
       return
     }
     setNotice(`${student.fullNames} ${student.surname} is now UNASSIGNED.`)
-    await load()
+    await load(false)
   }
 
   function success(message: string) {
     setAdding(false)
     setEditing(null)
     setNotice(message)
-    void load()
+    void load(false)
+  }
+
+  async function correctAttendance(student: StudentDirectoryItem, status: AttendanceStatus) {
+    if (!window.confirm(`Mark ${student.fullNames} ${student.surname} as ${status}?`)) return
+    setError('')
+    const response = await sendJson(`/api/mentor/attendance/${student.enrollmentId}`, 'PUT', { status })
+    if (!response.ok) {
+      setError(await getError(response))
+      return
+    }
+
+    const corrected = (await response.json()) as AttendanceMutationResponse
+    setDirectory((current) => current === null ? null : {
+      ...current,
+      items: current.items.map((item) => item.enrollmentId === corrected.enrollmentId
+        ? { ...item, attendanceStatus: corrected.status }
+        : item),
+    })
+    setNotice(corrected.message)
   }
 
   async function showQr(student: StudentDirectoryItem) {
@@ -162,8 +186,8 @@ export function StudentManagement() {
 
         {loading ? <p className="empty-state">Loading students…</p> : directory && directory.items.length > 0 ? (
           <>
-            <div className="table-scroll student-desktop-directory"><table className="directory-table student-table"><thead><tr><th>Student</th><th>Number</th><th>Demographics</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((student) => <StudentRow key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} />)}</tbody></table></div>
-            <div className="student-mobile-directory">{directory.items.map((student) => <StudentCard key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} />)}</div>
+            <div className="table-scroll student-desktop-directory"><table className="directory-table student-table"><thead><tr><th>Student</th><th>Number</th><th>Demographics</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((student) => <StudentRow key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} onAttendance={(item, status) => void correctAttendance(item, status)} />)}</tbody></table></div>
+            <div className="student-mobile-directory">{directory.items.map((student) => <StudentCard key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} onAttendance={(item, status) => void correctAttendance(item, status)} />)}</div>
           </>
         ) : <p className="empty-state">No students match this search.</p>}
 
@@ -252,21 +276,21 @@ function StudentForm({ mode, initial, onCancel, onSuccess, onError }: { mode: 'c
   )
 }
 
-function StudentRow({ student, onEdit, onRemove, onQr }: StudentActions) {
-  return <tr><td><strong>{student.initials} {student.surname}</strong><small>{student.fullNames}</small><small>{student.studentEmail}</small></td><td>{student.studentNumber}</td><td>{student.ageGroup} · {student.gender}<small>{student.ethnicity}</small></td><td><Attendance student={student} /></td><td><Actions student={student} onEdit={onEdit} onRemove={onRemove} onQr={onQr} /></td></tr>
+function StudentRow({ student, onEdit, onRemove, onQr, onAttendance }: StudentActions) {
+  return <tr><td><strong>{student.initials} {student.surname}</strong><small>{student.fullNames}</small><small>{student.studentEmail}</small></td><td>{student.studentNumber}</td><td>{student.ageGroup} · {student.gender}<small>{student.ethnicity}</small></td><td><Attendance student={student} /></td><td><Actions student={student} onEdit={onEdit} onRemove={onRemove} onQr={onQr} onAttendance={onAttendance} /></td></tr>
 }
 
-function StudentCard({ student, onEdit, onRemove, onQr }: StudentActions) {
-  return <article className="student-card"><div className="student-card-heading"><div><h2>{student.initials} {student.surname}</h2><p>{student.fullNames}</p></div><Attendance student={student} /></div><dl><div><dt>Student number</dt><dd>{student.studentNumber}</dd></div><div><dt>Age group</dt><dd>{student.ageGroup}</dd></div><div><dt>Gender</dt><dd>{student.gender}</dd></div><div><dt>Ethnicity</dt><dd>{student.ethnicity}</dd></div></dl><p className="student-email">{student.studentEmail}</p><Actions student={student} onEdit={onEdit} onRemove={onRemove} onQr={onQr} /></article>
+function StudentCard({ student, onEdit, onRemove, onQr, onAttendance }: StudentActions) {
+  return <article className="student-card"><div className="student-card-heading"><div><h2>{student.initials} {student.surname}</h2><p>{student.fullNames}</p></div><Attendance student={student} /></div><dl><div><dt>Student number</dt><dd>{student.studentNumber}</dd></div><div><dt>Age group</dt><dd>{student.ageGroup}</dd></div><div><dt>Gender</dt><dd>{student.gender}</dd></div><div><dt>Ethnicity</dt><dd>{student.ethnicity}</dd></div></dl><p className="student-email">{student.studentEmail}</p><Actions student={student} onEdit={onEdit} onRemove={onRemove} onQr={onQr} onAttendance={onAttendance} /></article>
 }
 
 function Attendance({ student }: { student: StudentDirectoryItem }) {
   return <><span className={`status-badge attendance-${student.attendanceStatus === '—' ? 'pending' : student.attendanceStatus.toLowerCase()}`}>{student.attendanceStatus}</span>{student.isIncomingTransfer && <small>Effective {student.groupEffectiveDate}</small>}</>
 }
 
-interface StudentActions { student: StudentDirectoryItem; onEdit: (student: StudentDirectoryItem) => void; onRemove: (student: StudentDirectoryItem) => void; onQr: (student: StudentDirectoryItem) => void }
-function Actions({ student, onEdit, onRemove, onQr }: StudentActions) {
-  return <div className="row-actions"><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onQr(student)}>QR code</button><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onEdit(student)}>Edit</button><button className="danger-text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onRemove(student)}>Remove</button>{student.isIncomingTransfer && <small>Available tomorrow</small>}</div>
+interface StudentActions { student: StudentDirectoryItem; onEdit: (student: StudentDirectoryItem) => void; onRemove: (student: StudentDirectoryItem) => void; onQr: (student: StudentDirectoryItem) => void; onAttendance: (student: StudentDirectoryItem, status: AttendanceStatus) => void }
+function Actions({ student, onEdit, onRemove, onQr, onAttendance }: StudentActions) {
+  return <div className="row-actions"><button className="attendance-action" disabled={student.isIncomingTransfer || student.attendanceStatus === 'Present'} type="button" onClick={() => onAttendance(student, 'Present')}>Mark Present</button><button className="attendance-action" disabled={student.isIncomingTransfer || student.attendanceStatus === 'Absent'} type="button" onClick={() => onAttendance(student, 'Absent')}>Mark Absent</button><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onQr(student)}>QR code</button><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onEdit(student)}>Edit</button><button className="danger-text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onRemove(student)}>Remove</button>{student.isIncomingTransfer && <small>Available tomorrow</small>}</div>
 }
 
 function QrCodeDialog({ student, imageUrl, loading, onClose, onDownload }: { student: StudentDirectoryItem; imageUrl: string; loading: boolean; onClose: () => void; onDownload: () => void }) {

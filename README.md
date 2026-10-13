@@ -45,6 +45,11 @@ downloads. Each 1024 × 1024 image contains a signed URL plus the student's
 readable full name. Editing student details rotates the QR version, while a
 group move leaves the student's QR unchanged.
 
+Feature 8 adds the mentor attendance workflow: a dedicated continuous QR
+scanner, backend signature and group validation, explicit manual corrections,
+lazy daily Absent rows and 15-second directory synchronization. Camera frames
+remain on the mentor's device; only the decoded signed URL reaches the API.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -150,3 +155,5 @@ See [student management](docs/student-management.md) for Feature 6 identity,
 onboarding, removal, transfer and concurrency rules.
 See [student QR codes](docs/student-qr-codes.md) for Feature 7 payload,
 signature, image and secret-management rules.
+See [attendance](docs/attendance.md) for Feature 8 daily rows, scanning,
+validation, manual correction and synchronization rules.
