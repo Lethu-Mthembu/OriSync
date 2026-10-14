@@ -567,11 +567,22 @@ button:focus-visible,
 }
 
 .register-table {
-  min-width: 47rem;
+  min-width: 61rem;
 }
 
 .register-action-cell {
   text-align: right !important;
+}
+
+.register-download-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.register-filter-button {
+  min-width: 4.8rem;
+  padding-inline: 0.7rem;
 }
 
 .report-download-row {

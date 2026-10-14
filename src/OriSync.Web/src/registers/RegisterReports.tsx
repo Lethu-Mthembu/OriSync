@@ -4,6 +4,11 @@ import { downloadResponse } from './download'
 import type { RegisterFilter, RegisterGroupSummary, RegisterOrientation, RegisterSummary } from './types'
 import { PageSkeleton } from '@/components/ui/page-skeleton'
 
+interface DownloadRequest {
+  groupId: number | 'all'
+  filter: RegisterFilter
+}
+
 export function RegisterReports() {
   const [orientations, setOrientations] = useState<RegisterOrientation[]>([])
   const [orientationId, setOrientationId] = useState('')
@@ -13,7 +18,7 @@ export function RegisterReports() {
   const [groups, setGroups] = useState<RegisterGroupSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [summaryLoading, setSummaryLoading] = useState(false)
-  const [downloading, setDownloading] = useState<'all' | number | null>(null)
+  const [downloading, setDownloading] = useState<DownloadRequest | null>(null)
   const [error, setError] = useState('')
 
   const orientation = useMemo(
@@ -87,12 +92,13 @@ export function RegisterReports() {
     return () => window.clearTimeout(task)
   }, [loadSummary])
 
-  async function download(groupId: number | 'all') {
+  async function download(groupId: number | 'all', downloadFilter: RegisterFilter) {
     const group = groupId === 'all' ? null : groups.find((item) => item.groupId === groupId)
-    if (groupId === 'all' ? !summary || summary.rowCount === 0 : !group || group.matchingStudents === 0) return
-    setDownloading(groupId)
+    const availableRows = group ? rowsFor(group, downloadFilter) : summary?.rowCount ?? 0
+    if (availableRows === 0) return
+    setDownloading({ groupId, filter: downloadFilter })
     setError('')
-    const values = new URLSearchParams({ orientationId, date, attendanceStatus: filter })
+    const values = new URLSearchParams({ orientationId, date, attendanceStatus: downloadFilter })
     const path = groupId === 'all'
       ? `/api/admin/registers/zip?${values}`
       : `/api/admin/registers/pdf?${values}&groupId=${encodeURIComponent(String(groupId))}`
@@ -115,7 +121,17 @@ export function RegisterReports() {
     setGroups([])
   }
 
-  return <main className="settings-workspace"><header className="settings-heading"><div><p className="eyebrow">Admin reports</p><h1>Attendance registers</h1><p>Select one attendance day, review every group, then download one PDF or a combined ZIP.</p></div></header>{error && <p className="error-message" role="alert">{error}</p>}<section className="settings-card report-card"><div className="report-toolbar"><div className="report-filters"><label className="field">Orientation<select disabled={loading || orientations.length === 0} value={orientationId} onChange={(event) => changeOrientation(event.target.value)}>{orientations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field">Date<select disabled={loading || availableDates.length === 0} value={date} onChange={(event) => { setDate(event.target.value); setSummary(null); setGroups([]) }}>{availableDates.map((item) => <option key={item} value={item}>{formatDate(item)}</option>)}</select></label><label className="field">Attendance<select disabled={loading} value={filter} onChange={(event) => { setFilter(event.target.value as RegisterFilter); setSummary(null); setGroups([]) }}><option value="All">All</option><option value="Present">Present</option><option value="Absent">Absent</option></select></label></div><button className="primary-button zip-download-button" type="button" disabled={loading || summaryLoading || downloading !== null || !summary || summary.rowCount === 0} onClick={() => void download('all')}>{downloading === 'all' ? 'Preparing ZIP…' : 'Download all as ZIP'}</button></div>{loading ? <PageSkeleton label="Loading attendance registers" variant="table" rows={5} /> : orientations.length === 0 ? <p className="empty-state">No orientations are available.</p> : availableDates.length === 0 ? <p className="empty-state">This orientation has no current or historical operating dates.</p> : summaryLoading ? <PageSkeleton label="Checking register availability" variant="table" rows={5} /> : groups.length === 0 && summary === null ? null : <><div className="register-summary-line"><strong>{summary?.rowCount.toLocaleString() ?? 0}</strong> matching {filter.toLowerCase()} rows across <strong>{groups.length}</strong> groups</div><div className="table-scroll"><table className="directory-table register-table"><thead><tr><th>Group</th><th>Total</th><th>Present</th><th>Absent</th><th>{filter} rows</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{groups.map((group) => <tr key={group.groupId}><td><span className="group-badge" style={{ backgroundColor: group.badgeColor }}>{group.groupName}</span></td><td>{group.totalStudents.toLocaleString()}</td><td>{group.presentStudents.toLocaleString()}</td><td>{group.absentStudents.toLocaleString()}</td><td><span className={`status-badge attendance-${filter === 'Present' ? 'present' : filter === 'Absent' ? 'absent' : 'pending'}`}>{group.matchingStudents.toLocaleString()}</span></td><td className="register-action-cell"><button className="secondary-button" type="button" disabled={downloading !== null || group.matchingStudents === 0} aria-label={`Download ${group.groupName} PDF`} onClick={() => void download(group.groupId)}>{downloading === group.groupId ? 'Preparing…' : 'Download PDF'}</button></td></tr>)}</tbody></table></div></>}</section></main>
+  return <main className="settings-workspace"><header className="settings-heading"><div><p className="eyebrow">Admin reports</p><h1>Attendance registers</h1><p>Select one attendance day, review every group, then download one PDF or a combined ZIP.</p></div></header>{error && <p className="error-message" role="alert">{error}</p>}<section className="settings-card report-card"><div className="report-toolbar"><div className="report-filters"><label className="field">Orientation<select disabled={loading || orientations.length === 0} value={orientationId} onChange={(event) => changeOrientation(event.target.value)}>{orientations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field">Date<select disabled={loading || availableDates.length === 0} value={date} onChange={(event) => { setDate(event.target.value); setSummary(null); setGroups([]) }}>{availableDates.map((item) => <option key={item} value={item}>{formatDate(item)}</option>)}</select></label><label className="field">Attendance<select disabled={loading} value={filter} onChange={(event) => { setFilter(event.target.value as RegisterFilter); setSummary(null); setGroups([]) }}><option value="All">All</option><option value="Present">Present</option><option value="Absent">Absent</option></select></label></div><button className="primary-button zip-download-button" type="button" disabled={loading || summaryLoading || downloading !== null || !summary || summary.rowCount === 0} onClick={() => void download('all', filter)}>{downloading?.groupId === 'all' ? 'Preparing ZIP…' : 'Download all as ZIP'}</button></div>{loading ? <PageSkeleton label="Loading attendance registers" variant="table" rows={5} /> : orientations.length === 0 ? <p className="empty-state">No orientations are available.</p> : availableDates.length === 0 ? <p className="empty-state">This orientation has no current or historical operating dates.</p> : summaryLoading ? <PageSkeleton label="Checking register availability" variant="table" rows={5} /> : groups.length === 0 && summary === null ? null : <><div className="register-summary-line"><strong>{summary?.rowCount.toLocaleString() ?? 0}</strong> matching {filter.toLowerCase()} rows across <strong>{groups.length}</strong> groups</div><div className="table-scroll"><table className="directory-table register-table"><thead><tr><th>Group</th><th>Total</th><th>Present</th><th>Absent</th><th>{filter} rows</th><th>Download PDF</th></tr></thead><tbody>{groups.map((group) => <tr key={group.groupId}><td><span className="group-badge" style={{ backgroundColor: group.badgeColor }}>{group.groupName}</span></td><td>{group.totalStudents.toLocaleString()}</td><td>{group.presentStudents.toLocaleString()}</td><td>{group.absentStudents.toLocaleString()}</td><td><span className={`status-badge attendance-${filter === 'Present' ? 'present' : filter === 'Absent' ? 'absent' : 'pending'}`}>{group.matchingStudents.toLocaleString()}</span></td><td className="register-action-cell"><div className="register-download-actions" role="group" aria-label={`Download ${group.groupName} register`}>{(['All', 'Present', 'Absent'] as RegisterFilter[]).map((downloadFilter) => <button className="secondary-button register-filter-button" type="button" key={downloadFilter} disabled={downloading !== null || rowsFor(group, downloadFilter) === 0} aria-label={`Download ${downloadFilter.toLowerCase()} students for ${group.groupName} as PDF`} onClick={() => void download(group.groupId, downloadFilter)}>{isDownloading(downloading, group.groupId, downloadFilter) ? 'Preparing…' : downloadFilter}</button>)}</div></td></tr>)}</tbody></table></div></>}</section></main>
+}
+
+function rowsFor(group: RegisterGroupSummary, filter: RegisterFilter) {
+  if (filter === 'Present') return group.presentStudents
+  if (filter === 'Absent') return group.absentStudents
+  return group.totalStudents
+}
+
+function isDownloading(downloading: DownloadRequest | null, groupId: number, filter: RegisterFilter) {
+  return downloading?.groupId === groupId && downloading.filter === filter
 }
 
 function localIsoDate() {
