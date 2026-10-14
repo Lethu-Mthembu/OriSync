@@ -12,6 +12,7 @@ import { useSessionActivity } from './auth/useSessionActivity'
 import { requestRearCamera } from './attendance/camera'
 import { AdminDashboard } from './dashboards/AdminDashboard'
 import { MentorDashboard } from './dashboards/MentorDashboard'
+import { WorkspaceShell, type WorkspaceNavigationItem } from './layout/WorkspaceShell'
 import { MentorActivation } from './mentors/MentorActivation'
 import { MentorManagement } from './mentors/MentorManagement'
 import { OrientationSettings } from './orientation/OrientationSettings'
@@ -98,7 +99,6 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Header />
       {session && view !== 'change-password' ? (
         <SignedInPanel
           session={session}
@@ -106,7 +106,7 @@ function App() {
           onLogout={() => void logout()}
         />
       ) : (
-        <main className="auth-layout">
+        <><Header /><main className="auth-layout">
           <section className="auth-introduction">
             <p className="eyebrow">Tshwane University of Technology</p>
             <h1>First-year orientation attendance</h1>
@@ -126,7 +126,7 @@ function App() {
               onCancel={session.mustChangePassword ? undefined : () => setView('login')}
             />
           )}
-        </main>
+        </main></>
       )}
     </div>
   )
@@ -135,6 +135,8 @@ function App() {
 function Header() {
   return (
     <header className="top-bar">
+      <img className="top-bar-tut-logo" src="/tut-logo.png" alt="Tshwane University of Technology" />
+      <span className="top-bar-divider" aria-hidden="true" />
       <span className="brand-mark" aria-hidden="true">O</span>
       <span className="brand-name">OriSync</span>
     </header>
@@ -168,22 +170,18 @@ function SignedInPanel({
 
 function AdminWorkspace({ session, onChangePassword, onLogout }: { session: Session; onChangePassword: () => void; onLogout: () => void }) {
   const [section, setSection] = useState<'dashboard' | 'students' | 'mentors' | 'reports' | 'orientations'>('dashboard')
+  type AdminSection = typeof section
+  const navigation: WorkspaceNavigationItem<AdminSection>[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { id: 'students', label: 'Students', icon: 'students' },
+    { id: 'mentors', label: 'Mentors', icon: 'mentors' },
+    { id: 'reports', label: 'Registers', icon: 'registers' },
+    { id: 'orientations', label: 'Orientations and groups', icon: 'settings' },
+  ]
   return (
-    <>
-      <div className="account-toolbar">
-        <span>{session.firstName} {session.surname}</span>
-        <button className="secondary-button" type="button" onClick={onChangePassword}>Change password</button>
-        <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
-      </div>
-      <nav className="admin-navigation" aria-label="Admin settings">
-        <button className={section === 'dashboard' ? 'active' : ''} type="button" onClick={() => setSection('dashboard')}>Dashboard</button>
-        <button className={section === 'students' ? 'active' : ''} type="button" onClick={() => setSection('students')}>Students</button>
-        <button className={section === 'mentors' ? 'active' : ''} type="button" onClick={() => setSection('mentors')}>Mentors</button>
-        <button className={section === 'reports' ? 'active' : ''} type="button" onClick={() => setSection('reports')}>Registers</button>
-        <button className={section === 'orientations' ? 'active' : ''} type="button" onClick={() => setSection('orientations')}>Orientations and groups</button>
-      </nav>
+    <WorkspaceShell session={session} activeSection={section} items={navigation} onSelect={setSection} onChangePassword={onChangePassword} onLogout={onLogout}>
       {section === 'dashboard' ? <AdminDashboard /> : section === 'students' ? <AdminStudentDirectory /> : section === 'mentors' ? <MentorManagement /> : section === 'reports' ? <RegisterReports /> : <OrientationSettings />}
-    </>
+    </WorkspaceShell>
   )
 }
 
@@ -221,18 +219,20 @@ function MentorWorkspace({ session, onChangePassword, onLogout }: { session: Ses
     return <Suspense fallback={<main className="loading-panel">Loading scanner…</main>}><AttendanceScanner initialCameraStream={initialCameraStream!} onClose={() => { setInitialCameraStream(null); setSection('students') }} /></Suspense>
   }
 
+  type MentorSection = Exclude<typeof section, 'scanner'>
+  const navigation: WorkspaceNavigationItem<MentorSection>[] = session.groupId === null
+    ? [{ id: 'dashboard', label: 'Dashboard', icon: 'dashboard' }]
+    : [
+        { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+        { id: 'students', label: 'Students', icon: 'students' },
+      ]
+
   return (
-    <>
-      <div className="account-toolbar mentor-toolbar">
-        <span>{session.firstName} {session.surname}</span>
-        <button className="secondary-button" type="button" onClick={onChangePassword}>Change password</button>
-        <button className="primary-button" type="button" onClick={onLogout}>Sign out</button>
-      </div>
-      {session.groupId !== null && <nav className="admin-navigation mentor-navigation" aria-label="Mentor workspace"><button className={section === 'dashboard' ? 'active' : ''} type="button" onClick={() => setSection('dashboard')}>Dashboard</button><button className={section === 'students' ? 'active' : ''} type="button" onClick={() => setSection('students')}>Students</button><button className="scanner-navigation-button" type="button" onPointerEnter={() => void preloadAttendanceScanner()} onTouchStart={() => void preloadAttendanceScanner()} onFocus={() => void preloadAttendanceScanner()} onClick={openScanner}>Scan attendance</button></nav>}
+    <WorkspaceShell session={session} activeSection={section as MentorSection} items={navigation} onSelect={setSection} onChangePassword={onChangePassword} onLogout={onLogout}>
       {session.groupId === null
         ? <main className="signed-in-panel"><p className="eyebrow">Mentor account</p><h1>Welcome, {session.firstName}</h1><p className="account-warning">No group is assigned. Contact the administrator.</p></main>
-        : section === 'dashboard' ? <MentorDashboard /> : <StudentManagement />}
-    </>
+        : section === 'dashboard' ? <MentorDashboard onScan={openScanner} onWarmScanner={() => void preloadAttendanceScanner()} /> : <StudentManagement />}
+    </WorkspaceShell>
   )
 }
 

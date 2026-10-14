@@ -82,6 +82,64 @@ public sealed class RegisterReportService(
         return new RegisterSummaryResponse(rowCount, groupCount, filter);
     }
 
+    public async Task<IReadOnlyList<RegisterGroupSummaryResponse>> GetAdminGroupSummariesAsync(
+        long orientationId,
+        DateOnly attendanceDate,
+        RegisterFilter filter,
+        CancellationToken cancellationToken)
+    {
+        EnsureValidFilter(filter);
+        await GetAdminContextAsync(
+            orientationId,
+            attendanceDate,
+            null,
+            cancellationToken);
+
+        var counts = await dbContext.AttendanceRecords
+            .AsNoTracking()
+            .Where(item =>
+                item.OrientationId == orientationId &&
+                item.AttendanceDate == attendanceDate)
+            .GroupBy(item => item.GroupId)
+            .Select(group => new
+            {
+                GroupId = group.Key,
+                Total = group.Count(),
+                Present = group.Count(item => item.Status == AttendanceStatus.Present),
+                Absent = group.Count(item => item.Status == AttendanceStatus.Absent)
+            })
+            .ToDictionaryAsync(item => item.GroupId, cancellationToken);
+
+        var groups = await dbContext.Groups
+            .AsNoTracking()
+            .Where(item => item.OrientationId == orientationId)
+            .OrderBy(item => item.Name)
+            .Select(item => new { item.Id, item.Name, item.BadgeColor })
+            .ToArrayAsync(cancellationToken);
+
+        return groups.Select(group =>
+        {
+            counts.TryGetValue(group.Id, out var groupCounts);
+            var total = groupCounts?.Total ?? 0;
+            var present = groupCounts?.Present ?? 0;
+            var absent = groupCounts?.Absent ?? 0;
+            var matching = filter switch
+            {
+                RegisterFilter.Present => present,
+                RegisterFilter.Absent => absent,
+                _ => total
+            };
+            return new RegisterGroupSummaryResponse(
+                group.Id,
+                group.Name,
+                group.BadgeColor,
+                total,
+                present,
+                absent,
+                matching);
+        }).ToArray();
+    }
+
     public async Task<RegisterDocument> CreateAdminPdfAsync(
         long orientationId,
         DateOnly attendanceDate,

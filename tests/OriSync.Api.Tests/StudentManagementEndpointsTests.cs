@@ -272,6 +272,29 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
         Assert.Equal(2, summary.RowCount);
         Assert.Equal(2, summary.GroupCount);
 
+        var groupSummaries = await admin.GetFromJsonAsync<RegisterGroupSummaryResponse[]>(
+            "/api/admin/registers/groups?orientationId=1&date=2027-02-01&attendanceStatus=Present",
+            JsonOptions);
+        Assert.NotNull(groupSummaries);
+        Assert.Collection(
+            groupSummaries,
+            blue =>
+            {
+                Assert.Equal("BLUE", blue.GroupName);
+                Assert.Equal(1, blue.TotalStudents);
+                Assert.Equal(0, blue.PresentStudents);
+                Assert.Equal(1, blue.AbsentStudents);
+                Assert.Equal(0, blue.MatchingStudents);
+            },
+            redGroup =>
+            {
+                Assert.Equal("RED", redGroup.GroupName);
+                Assert.Equal(1, redGroup.TotalStudents);
+                Assert.Equal(1, redGroup.PresentStudents);
+                Assert.Equal(0, redGroup.AbsentStudents);
+                Assert.Equal(1, redGroup.MatchingStudents);
+            });
+
         var response = await admin.GetAsync(
             "/api/admin/registers/zip?orientationId=1&date=2027-02-01&attendanceStatus=All");
         response.EnsureSuccessStatusCode();
