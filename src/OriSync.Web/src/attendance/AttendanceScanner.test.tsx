@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AttendanceScanner } from './AttendanceScanner'
@@ -53,9 +53,12 @@ describe('Attendance scanner', () => {
     const user = userEvent.setup()
 
     render(<AttendanceScanner initialCameraStream={Promise.resolve(firstStream.stream)} onClose={vi.fn()} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Starting rear camera')
     await waitFor(() => expect(scanner.decode).toHaveBeenCalledTimes(1))
     expect(scanner.options?.delayBetweenScanAttempts).toBe(500)
     expect(scanner.decode).toHaveBeenCalledWith(firstStream.stream, expect.any(HTMLVideoElement), expect.any(Function))
+    fireEvent.playing(screen.getByLabelText('Camera preview'))
+    expect(screen.queryByText('Starting rear camera…')).not.toBeInTheDocument()
 
     await act(async () => {
       scanner.callback?.(

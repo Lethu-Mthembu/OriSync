@@ -3,6 +3,7 @@ import { getError, sendJson } from '../auth/api'
 import type { Orientation, OrientationGroup } from '../orientation/types'
 import type { MentorDirectoryItem, MentorDirectoryResponse } from './types'
 import { useConfirmation } from '../components/useConfirmation'
+import { PageSkeleton } from '@/components/ui/page-skeleton'
 
 const statuses = ['All', 'Active', 'Disabled', 'Pending delivery', 'Invited', 'Expired', 'Delivery failed', 'Cancelled']
 
@@ -93,7 +94,7 @@ export function MentorManagement() {
           <label className="field">Rows<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}><option>20</option><option>50</option><option>100</option></select></label>
         </div>
 
-        {loading ? <p aria-live="polite">Loading mentors…</p> : directory?.items.length ? (
+        {loading ? <PageSkeleton label="Loading mentors" variant="table" rows={5} /> : directory?.items.length ? (
           <div className="table-scroll"><table className="directory-table"><thead><tr><th>Mentor</th><th>Student number</th><th>Group</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((item) => <MentorRow key={`${item.recordType}-${item.id}`} item={item} groups={groups} mutate={mutate} />)}</tbody></table></div>
         ) : <p className="empty-state">No mentor records match these filters.</p>}
 

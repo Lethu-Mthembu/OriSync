@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getError } from '../auth/api'
 import type { OrientationOption, StudentDirectoryResponse } from './types'
+import { PageSkeleton } from '@/components/ui/page-skeleton'
 
 const pageSizes = [10, 20, 50, 100]
 
@@ -12,6 +13,7 @@ export function AdminStudentDirectory() {
   const [attendanceStatus, setAttendanceStatus] = useState('all')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -25,6 +27,7 @@ export function AdminStudentDirectory() {
   }, [])
 
   const load = useCallback(async () => {
+    setLoading(true)
     const values = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
     if (search.trim()) values.set('search', search.trim())
     if (group === 'unassigned') values.set('unassigned', 'true')
@@ -37,6 +40,8 @@ export function AdminStudentDirectory() {
       setError('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Students could not be loaded.')
+    } finally {
+      setLoading(false)
     }
   }, [attendanceStatus, group, page, pageSize, search])
 
@@ -45,5 +50,5 @@ export function AdminStudentDirectory() {
     return () => window.clearTimeout(task)
   }, [load])
 
-  return <main className="settings-workspace"><header className="settings-heading"><div><p className="eyebrow">Admin directory</p><h1>All students</h1><p>This directory is read-only. Mentors control membership and student details.</p></div></header>{error && <p className="error-message" role="alert">{error}</p>}<section className="settings-card directory-card"><div className="directory-filters admin-student-filters"><label className="field">Search<input type="search" placeholder="Student number or name" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label><label className="field">Group<select value={group} onChange={(event) => { setGroup(event.target.value); setPage(1) }}><option value="all">All groups</option><option value="unassigned">UNASSIGNED</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field">Attendance<select value={attendanceStatus} onChange={(event) => { setAttendanceStatus(event.target.value); setPage(1) }}><option value="all">All</option><option value="Present">Present</option><option value="Absent">Absent</option></select></label><label className="field">Rows<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}>{pageSizes.map((size) => <option key={size}>{size}</option>)}</select></label></div>{directory && directory.items.length > 0 ? <div className="table-scroll"><table className="directory-table student-table"><thead><tr><th>Student</th><th>Number</th><th>Group</th><th>Demographics</th><th>Status</th></tr></thead><tbody>{directory.items.map((student) => <tr key={student.enrollmentId}><td><strong>{student.initials} {student.surname}</strong><small>{student.fullNames}</small><small>{student.studentEmail}</small></td><td>{student.studentNumber}</td><td><span className="group-badge" style={{ backgroundColor: student.groupBadgeColor }}>{student.groupName}</span></td><td>{student.ageGroup} · {student.gender}<small>{student.ethnicity}</small></td><td><span className={`status-badge attendance-${student.attendanceStatus === '—' ? 'pending' : student.attendanceStatus.toLowerCase()}`}>{student.attendanceStatus}</span></td></tr>)}</tbody></table></div> : <p className="empty-state">No students match these filters.</p>}<div className="pagination"><button className="secondary-button" type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {directory?.page ?? page} of {Math.max(directory?.totalPages ?? 0, 1)}</span><button className="secondary-button" type="button" disabled={!directory || page >= directory.totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></div></section></main>
+  return <main className="settings-workspace"><header className="settings-heading"><div><p className="eyebrow">Admin directory</p><h1>All students</h1><p>This directory is read-only. Mentors control membership and student details.</p></div></header>{error && <p className="error-message" role="alert">{error}</p>}<section className="settings-card directory-card"><div className="directory-filters admin-student-filters"><label className="field">Search<input type="search" placeholder="Student number or name" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label><label className="field">Group<select value={group} onChange={(event) => { setGroup(event.target.value); setPage(1) }}><option value="all">All groups</option><option value="unassigned">UNASSIGNED</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field">Attendance<select value={attendanceStatus} onChange={(event) => { setAttendanceStatus(event.target.value); setPage(1) }}><option value="all">All</option><option value="Present">Present</option><option value="Absent">Absent</option></select></label><label className="field">Rows<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}>{pageSizes.map((size) => <option key={size}>{size}</option>)}</select></label></div>{loading ? <PageSkeleton label="Loading student directory" variant="table" rows={5} /> : directory && directory.items.length > 0 ? <div className="table-scroll"><table className="directory-table student-table"><thead><tr><th>Student</th><th>Number</th><th>Group</th><th>Demographics</th><th>Status</th></tr></thead><tbody>{directory.items.map((student) => <tr key={student.enrollmentId}><td><strong>{student.initials} {student.surname}</strong><small>{student.fullNames}</small><small>{student.studentEmail}</small></td><td>{student.studentNumber}</td><td><span className="group-badge" style={{ backgroundColor: student.groupBadgeColor }}>{student.groupName}</span></td><td>{student.ageGroup} · {student.gender}<small>{student.ethnicity}</small></td><td><span className={`status-badge attendance-${student.attendanceStatus === '—' ? 'pending' : student.attendanceStatus.toLowerCase()}`}>{student.attendanceStatus}</span></td></tr>)}</tbody></table></div> : <p className="empty-state">No students match these filters.</p>}<div className="pagination"><button className="secondary-button" type="button" disabled={loading || page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {directory?.page ?? page} of {Math.max(directory?.totalPages ?? 0, 1)}</span><button className="secondary-button" type="button" disabled={loading || !directory || page >= directory.totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></div></section></main>
 }

@@ -4,6 +4,8 @@ import type { AttendanceMutationResponse, AttendanceStatus } from '../attendance
 import { downloadResponse } from '../registers/download'
 import type { RegisterFilter, RegisterSummary } from '../registers/types'
 import { useConfirmation } from '../components/useConfirmation'
+import BoxLoader from '@/components/ui/box-loader'
+import { PageSkeleton } from '@/components/ui/page-skeleton'
 import type {
   Ethnicity,
   Gender,
@@ -262,7 +264,7 @@ export function StudentManagement() {
           <label className="field">Rows<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}>{pageSizes.map((size) => <option key={size}>{size}</option>)}</select></label>
         </div>
 
-        {loading ? <p className="empty-state">Loading students…</p> : directory && directory.items.length > 0 ? (
+        {loading ? <PageSkeleton label="Loading students" variant="table" rows={5} /> : directory && directory.items.length > 0 ? (
           <>
             <div className="table-scroll student-desktop-directory"><table className="directory-table student-table"><thead><tr><th>Student</th><th>Number</th><th>Demographics</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((student) => <StudentRow key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} onAttendance={(item, status) => void correctAttendance(item, status)} />)}</tbody></table></div>
             <div className="student-mobile-directory">{directory.items.map((student) => <StudentCard key={student.enrollmentId} student={student} onEdit={setEditing} onRemove={(item) => void remove(item)} onQr={(item) => void showQr(item)} onAttendance={(item, status) => void correctAttendance(item, status)} />)}</div>
@@ -386,5 +388,5 @@ function Actions({ student, onEdit, onRemove, onQr, onAttendance }: StudentActio
 }
 
 function QrCodeDialog({ student, imageUrl, loading, sending, onClose, onDownload, onSend }: { student: StudentDirectoryItem; imageUrl: string; loading: boolean; sending: boolean; onClose: () => void; onDownload: () => void; onSend: () => void }) {
-  return <div className="qr-dialog-backdrop" role="presentation"><section className="qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-dialog-title"><div className="qr-dialog-heading"><div><p className="form-kicker">Student QR code</p><h2 id="qr-dialog-title">{student.fullNames} {student.surname}</h2></div><button className="secondary-button" type="button" onClick={onClose}>Close</button></div>{imageUrl ? <img src={imageUrl} alt={`QR code for ${student.fullNames} ${student.surname}`} /> : <p className="empty-state">Loading QR code…</p>}<p className="form-note">This QR remains valid until encoded student details are changed.</p>{student.personalEmail ? <p className="qr-recipient">Email recipient: <strong>{student.personalEmail}</strong></p> : <p className="account-warning">Add a personal email before sending this QR code.</p>}<div className="button-row compact-row"><button className="primary-button" disabled={loading || !imageUrl} type="button" onClick={onDownload}>{loading ? 'Preparing…' : 'Download PNG'}</button><button className="secondary-button" disabled={sending || !imageUrl || !student.personalEmail} type="button" onClick={onSend}>{sending ? 'Queueing…' : 'Send to student'}</button></div></section></div>
+  return <div className="qr-dialog-backdrop" role="presentation"><section className="qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-dialog-title"><div className="qr-dialog-heading"><div><p className="form-kicker">Student QR code</p><h2 id="qr-dialog-title">{student.fullNames} {student.surname}</h2></div><button className="secondary-button" type="button" onClick={onClose}>Close</button></div>{imageUrl ? <img src={imageUrl} alt={`QR code for ${student.fullNames} ${student.surname}`} /> : <div className="qr-inline-loader" role="status" aria-live="polite"><BoxLoader /><span className="sr-only">Loading QR code</span></div>}<p className="form-note">This QR remains valid until encoded student details are changed.</p>{student.personalEmail ? <p className="qr-recipient">Email recipient: <strong>{student.personalEmail}</strong></p> : <p className="account-warning">Add a personal email before sending this QR code.</p>}<div className="button-row compact-row"><button className="primary-button" disabled={loading || !imageUrl} type="button" onClick={onDownload}>{loading ? 'Preparing…' : 'Download PNG'}</button><button className="secondary-button" disabled={sending || !imageUrl || !student.personalEmail} type="button" onClick={onSend}>{sending ? 'Queueing…' : 'Send to student'}</button></div></section></div>
 }

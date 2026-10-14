@@ -1,4 +1,13 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  --color-destructive-foreground: var(--destructive-foreground);
+}
+
 :root {
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --radius: 0.625rem;
   font-family: Poppins, "Segoe UI", sans-serif;
   color: #355458;
   background: #f7f9fb;
@@ -7,6 +16,100 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+.dark {
+  --card: oklch(0.145 0 0);
+  --popover: oklch(0.145 0 0);
+  --primary: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@keyframes box1 {
+  0%,
+  50% {
+    transform: translate(100%, 0);
+  }
+  100% {
+    transform: translate(200%, 0);
+  }
+}
+
+@keyframes box2 {
+  0% {
+    transform: translate(0, 100%);
+  }
+  50% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(100%, 0);
+  }
+}
+
+@keyframes box3 {
+  0%,
+  50% {
+    transform: translate(100%, 100%);
+  }
+  100% {
+    transform: translate(0, 100%);
+  }
+}
+
+@keyframes box4 {
+  0% {
+    transform: translate(200%, 0);
+  }
+  50% {
+    transform: translate(200%, 100%);
+  }
+  100% {
+    transform: translate(100%, 100%);
+  }
+}
+
+.boxes {
+  --box-size: 1.125rem;
+  position: relative;
+  width: calc(var(--box-size) * 3);
+  height: calc(var(--box-size) * 2);
+  transform: rotateX(58deg) rotateZ(45deg);
+  transform-style: preserve-3d;
+}
+
+.box {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: var(--box-size);
+  height: var(--box-size);
+  animation-duration: 1.4s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  transform-style: preserve-3d;
+}
+
+.box-1 { animation-name: box1; }
+.box-2 { animation-name: box2; }
+.box-3 { animation-name: box3; }
+.box-4 { animation-name: box4; }
+
+.face {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(255 255 255 / 20%);
+  background: #005596;
+}
+
+.face-front { transform: translateZ(calc(var(--box-size) / 2)); }
+.face-back { transform: rotateY(180deg) translateZ(calc(var(--box-size) / 2)); }
+.face-right { background: #0b3d69; transform: rotateY(90deg) translateZ(calc(var(--box-size) / 2)); }
+.face-top { background: #fdb813; transform: rotateX(90deg) translateZ(calc(var(--box-size) / 2)); }
 
 body {
   min-width: 20rem;

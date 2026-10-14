@@ -1345,6 +1345,14 @@ button:focus-visible,
   text-align: center;
 }
 
+.qr-inline-loader {
+  display: grid;
+  min-height: 18rem;
+  place-items: center;
+  border-radius: 0.5rem;
+  background: #f5f8fa;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

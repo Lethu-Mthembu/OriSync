@@ -10,6 +10,7 @@ import {
   type CameraFailure,
 } from './camera'
 import type { AttendanceMutationResponse, AttendanceProblem } from './types'
+import BoxLoader from '@/components/ui/box-loader'
 import './AttendanceScanner.css'
 
 interface ScannerResult {
@@ -29,6 +30,7 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([])
   const [selectedCameraId, setSelectedCameraId] = useState('')
   const [result, setResult] = useState<ScannerResult | null>(null)
+  const [cameraReady, setCameraReady] = useState(false)
   const [pageVisible, setPageVisible] = useState(() => document.visibilityState !== 'hidden')
 
   const stopCamera = useCallback(() => {
@@ -37,6 +39,7 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
     if (streamRef.current) stopMediaStream(streamRef.current)
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
+    setCameraReady(false)
   }, [])
 
   const stopPendingInitialCamera = useCallback(() => {
@@ -198,10 +201,16 @@ export function AttendanceScanner({ initialCameraStream, onClose }: { initialCam
         <button className="scanner-close" type="button" onClick={() => { stopCamera(); onClose() }}>Back to students</button>
       </header>
       <section className="scanner-view" aria-label="QR scanner">
-        <video ref={videoRef} muted playsInline aria-label="Camera preview" />
+        <video ref={videoRef} muted playsInline aria-label="Camera preview" onPlaying={() => setCameraReady(true)} />
         <div className="scanner-frame" aria-hidden="true" />
         <p className="scanner-instruction">Place the student QR code inside the frame.</p>
         {processing && <div className="scanner-processing" role="status">Verifying attendance…</div>}
+        {!cameraReady && !processing && cameraError === null && (
+          <div className="scanner-processing scanner-starting" role="status" aria-live="polite">
+            <BoxLoader />
+            <span>Starting rear camera…</span>
+          </div>
+        )}
         {cameraError !== null && (
           <div className="scanner-camera-error" role="alert">
             <p>{cameraError.message}</p>
