@@ -84,6 +84,17 @@ public static class StudentManagementEndpoints
             return Results.File(document.Content, "image/png", document.FileName);
         });
 
+        mentor.MapPost("/{enrollmentId:long}/qr/email", async (
+            long enrollmentId,
+            ClaimsPrincipal principal,
+            StudentQrCodeService service,
+            CancellationToken cancellationToken) =>
+            Results.Accepted(
+                value: await service.QueueEmailAsync(
+                    GetAccountId(principal),
+                    enrollmentId,
+                    cancellationToken)));
+
         mentor.MapPost("", async (
             SaveStudentRequest request,
             ClaimsPrincipal principal,

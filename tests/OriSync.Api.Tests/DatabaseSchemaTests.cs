@@ -23,7 +23,8 @@ public sealed class DatabaseSchemaTests : IAsyncLifetime
         "people",
         "person_emails",
         "sessions",
-        "student_enrollments"
+        "student_enrollments",
+        "student_qr_email_outbox"
     ];
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
@@ -165,6 +166,7 @@ public sealed class DatabaseSchemaTests : IAsyncLifetime
                 builder.UseSetting("ConnectionStrings:OriSync", _postgres.GetConnectionString());
                 builder.UseSetting("DatabaseMigrations:ApplyOnStartup", "true");
                 builder.UseSetting("PasswordReset:DispatcherEnabled", "false");
+                builder.UseSetting("StudentQrEmail:DispatcherEnabled", "false");
             });
 
         using var client = factory.CreateClient();

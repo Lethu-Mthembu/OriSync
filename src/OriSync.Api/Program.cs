@@ -58,11 +58,13 @@ builder.Services.AddScoped<DailyAttendanceMaterializer>();
 builder.Services.AddScoped<RegisterReportService>();
 builder.Services.AddSingleton<RegisterPdfRenderer>();
 builder.Services.AddScoped<StudentQrCodeService>();
+builder.Services.AddScoped<StudentQrEmailOutboxProcessor>();
 builder.Services.AddSingleton<StudentQrCodeTokenService>();
 builder.Services.AddSingleton<StudentQrCodeImageRenderer>();
 builder.Services.AddScoped<MentorInvitationEmailProcessor>();
 builder.Services.AddHostedService<PasswordResetEmailOutboxWorker>();
 builder.Services.AddHostedService<MentorInvitationEmailWorker>();
+builder.Services.AddHostedService<StudentQrEmailOutboxWorker>();
 var passwordResetOptions = builder.Services.AddOptions<PasswordResetOptions>()
     .Bind(builder.Configuration.GetSection(PasswordResetOptions.SectionName));
 var resendOptions = builder.Services.AddOptions<ResendOptions>()
@@ -71,6 +73,8 @@ var mentorInvitationOptions = builder.Services.AddOptions<MentorInvitationOption
     .Bind(builder.Configuration.GetSection(MentorInvitationOptions.SectionName));
 var studentQrCodeOptions = builder.Services.AddOptions<StudentQrCodeOptions>()
     .Bind(builder.Configuration.GetSection(StudentQrCodeOptions.SectionName));
+builder.Services.AddOptions<StudentQrEmailOptions>()
+    .Bind(builder.Configuration.GetSection(StudentQrEmailOptions.SectionName));
 if (!builder.Environment.IsDevelopment())
 {
     passwordResetOptions
@@ -109,6 +113,11 @@ builder.Services.AddHttpClient<IMentorInvitationEmailSender, ResendMentorInvitat
 {
     client.BaseAddress = new Uri("https://api.resend.com/");
     client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient<IStudentQrEmailSender, ResendStudentQrEmailSender>(client =>
+{
+    client.BaseAddress = new Uri("https://api.resend.com/");
+    client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddAuthentication(AuthenticationConstants.Scheme)
     .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(

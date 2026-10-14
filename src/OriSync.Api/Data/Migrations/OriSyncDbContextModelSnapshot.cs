@@ -961,6 +961,80 @@ namespace OriSync.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OriSync.Api.Domain.StudentQrEmailOutbox", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTimeOffset>("AvailableAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("available_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("DiscardAfter")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("discard_after");
+
+                    b.Property<DateTimeOffset?>("DiscardedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("discarded_at");
+
+                    b.Property<int>("QrVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("qr_version");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("recipient_email");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<long>("StudentEnrollmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("student_enrollment_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_student_qr_email_outbox");
+
+                    b.HasIndex("DiscardAfter")
+                        .HasDatabaseName("ix_student_qr_email_outbox_discard_after")
+                        .HasFilter("sent_at IS NULL AND discarded_at IS NULL");
+
+                    b.HasIndex("StudentEnrollmentId")
+                        .HasDatabaseName("ix_student_qr_email_outbox_student_enrollment_id");
+
+                    b.HasIndex("AvailableAt", "Id")
+                        .HasDatabaseName("ix_student_qr_email_outbox_available_at_id")
+                        .HasFilter("sent_at IS NULL AND discarded_at IS NULL");
+
+                    b.ToTable("student_qr_email_outbox", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_student_qr_email_outbox_attempts", "attempt_count BETWEEN 0 AND 20");
+
+                            t.HasCheckConstraint("ck_student_qr_email_outbox_qr_version", "qr_version > 0");
+
+                            t.HasCheckConstraint("ck_student_qr_email_outbox_recipient", "position('@' in recipient_email) > 1");
+
+                            t.HasCheckConstraint("ck_student_qr_email_outbox_terminal_state", "sent_at IS NULL OR discarded_at IS NULL");
+
+                            t.HasCheckConstraint("ck_student_qr_email_outbox_times", "available_at >= created_at AND discard_after > created_at AND (sent_at IS NULL OR sent_at >= created_at) AND (discarded_at IS NULL OR discarded_at >= created_at)");
+                        });
+                });
+
             modelBuilder.Entity("OriSync.Api.Domain.Account", b =>
                 {
                     b.HasOne("OriSync.Api.Domain.OrientationGroup", "CurrentGroup")
@@ -1132,6 +1206,18 @@ namespace OriSync.Api.Data.Migrations
                     b.Navigation("PendingGroup");
 
                     b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("OriSync.Api.Domain.StudentQrEmailOutbox", b =>
+                {
+                    b.HasOne("OriSync.Api.Domain.StudentEnrollment", "StudentEnrollment")
+                        .WithMany()
+                        .HasForeignKey("StudentEnrollmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_student_qr_email_outbox_student_enrollments_student_enrollm");
+
+                    b.Navigation("StudentEnrollment");
                 });
 
             modelBuilder.Entity("OriSync.Api.Domain.Account", b =>

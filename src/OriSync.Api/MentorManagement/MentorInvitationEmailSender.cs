@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using Microsoft.Extensions.Options;
 using OriSync.Api.Authentication;
 
@@ -36,11 +37,19 @@ public sealed partial class ResendMentorInvitationEmailSender(
         using var request = new HttpRequestMessage(HttpMethod.Post, "emails");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
         request.Headers.Add("Idempotency-Key", idempotencyKey);
+        var encodedLink = WebUtility.HtmlEncode(activationLink);
         request.Content = JsonContent.Create(new
         {
             from = settings.FromEmail,
             to = new[] { recipient },
             subject = "Activate your OriSync mentor account",
+            html = $"""
+                <p>You have been invited to OriSync as an orientation mentor.</p>
+                <p><a href="{encodedLink}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#0B5EA8;color:#FFFFFF;text-decoration:none;font-weight:700">Activate account</a></p>
+                <p>The link expires 24 hours after this email is delivered.</p>
+                <p>If the button does not work, copy and paste this address into your browser:<br><a href="{encodedLink}">{encodedLink}</a></p>
+                <p>If you were not expecting this invitation, ignore this email.</p>
+                """,
             text = "You have been invited to OriSync as an orientation mentor. " +
                 $"Open this secure link to create your account: {activationLink}\n\n" +
                 "The link expires 24 hours after this email is delivered. " +

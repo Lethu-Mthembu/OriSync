@@ -35,6 +35,7 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
     private readonly MutableTimeProvider _time = new(
         new DateTimeOffset(2027, 2, 1, 6, 0, 0, TimeSpan.Zero));
     private WebApplicationFactory<Program>? _factory;
+    private readonly RecordingStudentQrEmailSender _qrEmailSender = new();
     private long _redGroupId;
     private long _blueGroupId;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -50,10 +51,13 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
             builder.UseSetting("ConnectionStrings:OriSync", _postgres.GetConnectionString());
             builder.UseSetting("PasswordReset:DispatcherEnabled", "false");
             builder.UseSetting("MentorInvitations:DispatcherEnabled", "false");
+            builder.UseSetting("StudentQrEmail:DispatcherEnabled", "false");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton<TimeProvider>(_time);
+                services.RemoveAll<IStudentQrEmailSender>();
+                services.AddSingleton<IStudentQrEmailSender>(_qrEmailSender);
             });
         });
 
@@ -147,6 +151,22 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
             "Student email must be 223456789@tut4life.ac.za.",
             await response.Content.ReadAsStringAsync(),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RegistrationRequiresPersonalEmail()
+    {
+        using var mentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var request = Student("223456789", "Jane", "Doe") with { PersonalEmail = null! };
+
+        var response = await SendJsonAsync(
+            mentor,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Personal email is required.", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -571,6 +591,54 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
         Assert.Equal(2, updated.Student.QrVersion);
         Assert.Equal("JM", updated.Student.Initials);
         Assert.Equal("Doe-Smith", updated.Student.Surname);
+
+        var demographicResponse = await SendJsonAsync(
+            red,
+            HttpMethod.Put,
+            $"/api/mentor/students/{created.Student.EnrollmentId}",
+            Student("223456789", "Jane Marie", "Doe-Smith") with { AgeGroup = StudentAgeGroup.C3 });
+        var demographicUpdate = (await demographicResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions))!;
+        Assert.Equal(2, demographicUpdate.Student.QrVersion);
+        Assert.Equal(StudentAgeGroup.C3, demographicUpdate.Student.AgeGroup);
+    }
+
+    [Fact]
+    public async Task MentorQueuesAndDispatchesQrToStudentsCurrentPersonalEmail()
+    {
+        using var mentor = await CreateMentorClientAsync("red.mentor@orisync.test");
+        var createdResponse = await SendJsonAsync(
+            mentor,
+            HttpMethod.Post,
+            "/api/mentor/students",
+            Student("223456789", "Jane Mary", "Doe"));
+        createdResponse.EnsureSuccessStatusCode();
+        var created = await createdResponse.Content.ReadFromJsonAsync<StudentMutationResponse>(JsonOptions);
+        Assert.NotNull(created);
+
+        var queueResponse = await SendJsonAsync(
+            mentor,
+            HttpMethod.Post,
+            $"/api/mentor/students/{created.Student.EnrollmentId}/qr/email");
+        Assert.Equal(HttpStatusCode.Accepted, queueResponse.StatusCode);
+        var queued = await queueResponse.Content.ReadFromJsonAsync<StudentQrEmailQueuedResponse>(JsonOptions);
+        Assert.NotNull(queued);
+        Assert.Equal("223456789@personal.test", queued.RecipientEmail);
+
+        await using (var scope = _factory!.Services.CreateAsyncScope())
+        {
+            var processor = scope.ServiceProvider.GetRequiredService<StudentQrEmailOutboxProcessor>();
+            Assert.True(await processor.ProcessOneAsync(CancellationToken.None));
+        }
+
+        var delivery = Assert.Single(_qrEmailSender.Deliveries);
+        Assert.Equal("223456789@personal.test", delivery.Recipient);
+        Assert.Equal("Jane Mary Doe", delivery.StudentName);
+        Assert.Equal("223456789", delivery.StudentNumber);
+        Assert.Equal([0x89, 0x50, 0x4E, 0x47], delivery.Content[..4]);
+
+        await using var verificationScope = _factory!.Services.CreateAsyncScope();
+        var dbContext = verificationScope.ServiceProvider.GetRequiredService<OriSyncDbContext>();
+        Assert.NotNull((await dbContext.StudentQrEmailOutbox.SingleAsync()).SentAt);
     }
 
     [Fact]
@@ -914,6 +982,23 @@ public sealed class StudentManagementEndpointsTests : IAsyncLifetime
         };
         account.PasswordHash = new PasswordHasher<Account>().HashPassword(account, Password);
         return account;
+    }
+
+    private sealed class RecordingStudentQrEmailSender : IStudentQrEmailSender
+    {
+        public List<(string Recipient, string StudentName, string StudentNumber, byte[] Content)> Deliveries { get; } = [];
+
+        public Task<bool> SendAsync(
+            string recipient,
+            string studentName,
+            string studentNumber,
+            StudentQrCodeDocument document,
+            string idempotencyKey,
+            CancellationToken cancellationToken)
+        {
+            Deliveries.Add((recipient, studentName, studentNumber, document.Content));
+            return Task.FromResult(true);
+        }
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider

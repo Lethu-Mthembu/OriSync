@@ -384,6 +384,46 @@ internal sealed class PasswordResetEmailOutboxConfiguration
     }
 }
 
+internal sealed class StudentQrEmailOutboxConfiguration
+    : IEntityTypeConfiguration<StudentQrEmailOutbox>
+{
+    public void Configure(EntityTypeBuilder<StudentQrEmailOutbox> builder)
+    {
+        builder.ToTable("student_qr_email_outbox", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_student_qr_email_outbox_recipient",
+                "position('@' in recipient_email) > 1");
+            table.HasCheckConstraint(
+                "ck_student_qr_email_outbox_qr_version",
+                "qr_version > 0");
+            table.HasCheckConstraint(
+                "ck_student_qr_email_outbox_times",
+                "available_at >= created_at AND discard_after > created_at " +
+                "AND (sent_at IS NULL OR sent_at >= created_at) " +
+                "AND (discarded_at IS NULL OR discarded_at >= created_at)");
+            table.HasCheckConstraint(
+                "ck_student_qr_email_outbox_terminal_state",
+                "sent_at IS NULL OR discarded_at IS NULL");
+            table.HasCheckConstraint(
+                "ck_student_qr_email_outbox_attempts",
+                "attempt_count BETWEEN 0 AND 20");
+        });
+
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).UseIdentityByDefaultColumn();
+        builder.Property(x => x.RecipientEmail).HasColumnType("text").IsRequired();
+        builder.HasIndex(x => new { x.AvailableAt, x.Id })
+            .HasFilter("sent_at IS NULL AND discarded_at IS NULL");
+        builder.HasIndex(x => x.DiscardAfter)
+            .HasFilter("sent_at IS NULL AND discarded_at IS NULL");
+        builder.HasOne(x => x.StudentEnrollment)
+            .WithMany()
+            .HasForeignKey(x => x.StudentEnrollmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEvent>
 {
     public void Configure(EntityTypeBuilder<AuditEvent> builder)

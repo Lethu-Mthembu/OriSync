@@ -286,7 +286,7 @@ public sealed partial class MentorManagementService(
                 item => item.InstitutionNumber == request.MentorNumber,
                 cancellationToken))
         {
-            throw Conflict("This mentor number already exists.");
+            throw Conflict("This student number already exists.");
         }
 
         if (await dbContext.PersonEmails.AnyAsync(
@@ -360,7 +360,7 @@ public sealed partial class MentorManagementService(
                 item => item.InstitutionNumber == request.MentorNumber && item.Id != account.PersonId,
                 cancellationToken))
         {
-            throw Conflict("This mentor number already exists.");
+            throw Conflict("This student number already exists.");
         }
 
         var loginEmail = account.Person.Emails.Single(item => item.EmailType == EmailType.Login);
@@ -526,7 +526,7 @@ public sealed partial class MentorManagementService(
         if (string.IsNullOrWhiteSpace(mentorNumber) ||
             !MentorNumberPattern().IsMatch(mentorNumber))
         {
-            throw Invalid("The mentor number must contain nine digits and start with 2.");
+            throw Invalid("The student number must contain nine digits and start with 2.");
         }
 
     }

@@ -1,7 +1,7 @@
 # Mentor management
 
 Feature 5 provides administrator-only mentor administration and public,
-token-protected activation. Mentor numbers are returned only by administrator
+token-protected activation. Mentor student numbers are returned only by administrator
 endpoints.
 
 ## Invitation flow
@@ -10,9 +10,10 @@ endpoints.
    enters one email address.
 2. OriSync stores a hashed activation token plus a Data Protection-encrypted
    delivery copy. The raw token is never stored.
-3. The durable dispatcher sends the link through Resend. Its 24-hour validity
-   begins only after successful delivery; retries use a stable idempotency key.
-4. The mentor supplies first name, surname, a unique nine-digit mentor number
+3. The durable dispatcher sends an HTML activation button and a plain URL
+   fallback through Resend. Its 24-hour validity begins only after successful
+   delivery; retries use a stable idempotency key.
+4. The mentor supplies first name, surname, a unique nine-digit student number
    matching `^2[0-9]{8}$`, and a compliant password. The invited email is locked.
 5. Acceptance is transactional and single use. It creates the mentor account in
    the invitation's current group.
@@ -28,7 +29,7 @@ The centralized directory defaults to 20 rows, with 50 and 100-row options. It
 supports search plus group and status filters and combines mentor accounts with
 pending, delivered, expired, failed and recently cancelled invitations.
 
-An administrator can edit a mentor's name, surname, mentor number, login email
+An administrator can edit a mentor's name, surname, student number, login email
 and active group. Identity changes revoke active sessions. Disabling also
 revokes the session immediately but deliberately preserves the group. A disabled
 mentor can be reactivated only while that group remains active in the active
