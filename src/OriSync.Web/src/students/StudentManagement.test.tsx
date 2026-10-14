@@ -53,7 +53,9 @@ describe('Student management', () => {
     })
     const user = userEvent.setup()
 
-    render(<StudentManagement />)
+    render(<StudentManagement userName="Jane Mentor" />)
+    expect(screen.getByText('Jane Mentor')).toBeInTheDocument()
+    expect(screen.queryByText('Mentor workspace')).not.toBeInTheDocument()
     await screen.findByText('No students match these filters.')
     await user.click(screen.getByRole('button', { name: 'Add student' }))
     await user.type(screen.getByLabelText('Student number'), '223456789')
@@ -120,7 +122,7 @@ describe('Student management', () => {
     }))
     const user = userEvent.setup()
 
-    render(<StudentManagement />)
+    render(<StudentManagement userName="Jane Mentor" />)
     await screen.findAllByText('Jane Mary')
     await user.click(screen.getAllByRole('button', { name: 'Edit' })[0])
     await user.clear(screen.getByLabelText('Full names'))
@@ -166,7 +168,7 @@ describe('Student management', () => {
       throw new Error(`Unexpected request: ${path}`)
     }))
 
-    render(<StudentManagement />)
+    render(<StudentManagement userName="Jane Mentor" />)
     await screen.findAllByText('Available tomorrow')
     expect(screen.getAllByRole('button', { name: 'Edit' }).every((button) => button.hasAttribute('disabled'))).toBe(true)
     expect(screen.getAllByRole('button', { name: 'Remove' }).every((button) => button.hasAttribute('disabled'))).toBe(true)
@@ -221,7 +223,7 @@ describe('Student management', () => {
     }))
     const user = userEvent.setup()
 
-    render(<StudentManagement />)
+    render(<StudentManagement userName="Jane Mentor" />)
     await screen.findAllByText('Jane Mary')
     await user.click(screen.getAllByRole('button', { name: 'Mark Present' })[0])
     const confirmation = await screen.findByRole('alertdialog', { name: 'Mark student Present?' })
@@ -284,7 +286,7 @@ describe('Student management', () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
     const user = userEvent.setup()
 
-    render(<StudentManagement />)
+    render(<StudentManagement userName="Jane Mentor" />)
     await screen.findAllByText('Jane Mary')
     await user.click(screen.getAllByRole('button', { name: 'QR code' })[0])
     expect(await screen.findByRole('img', { name: 'QR code for Jane Mary Doe' })).toHaveAttribute('src', 'blob:preview')

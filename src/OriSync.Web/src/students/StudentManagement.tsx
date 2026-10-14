@@ -35,7 +35,7 @@ const emptyStudent: StudentFormValues = {
   ethnicity: 'African',
 }
 
-export function StudentManagement() {
+export function StudentManagement({ userName }: { userName: string }) {
   const [directory, setDirectory] = useState<StudentDirectoryResponse | null>(null)
   const [search, setSearch] = useState('')
   const [attendanceStatus, setAttendanceStatus] = useState<RegisterFilter>('All')
@@ -247,7 +247,7 @@ export function StudentManagement() {
   return (
     <main className="settings-workspace student-workspace">
       <header className="settings-heading student-heading">
-        <div><p className="eyebrow">Mentor workspace</p><h1>Students</h1><p>Manage only the students assigned to your group.</p></div>
+        <div><p className="eyebrow">{userName}</p><h1>Students</h1><p>Manage only the students assigned to your group.</p></div>
         <div className="student-heading-actions"><button className="secondary-button" type="button" disabled={registerDownloading || !registerSummary || registerSummary.rowCount === 0} onClick={() => void downloadRegister()}>{registerDownloading ? 'Preparing…' : 'Download register'}</button><button className="primary-button" type="button" onClick={() => { setAdding(true); setEditing(null); setError(''); setNotice('') }}>Add student</button></div>
       </header>
 

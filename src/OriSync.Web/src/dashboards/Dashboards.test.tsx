@@ -22,8 +22,10 @@ describe('Role dashboards', () => {
       ],
     })))
 
-    render(<AdminDashboard />)
+    render(<AdminDashboard userName="Lethu Mthembu" />)
 
+    expect(screen.getByText('Lethu Mthembu')).toBeInTheDocument()
+    expect(screen.queryByText('Admin dashboard')).not.toBeInTheDocument()
     expect(await screen.findByText('50.0%')).toBeInTheDocument()
     expect(screen.getByText('BLUE')).toBeInTheDocument()
     expect(screen.getByText('2 students')).toBeInTheDocument()

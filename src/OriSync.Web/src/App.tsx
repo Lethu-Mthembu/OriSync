@@ -181,7 +181,7 @@ function AdminWorkspace({ session, onChangePassword, onLogout }: { session: Sess
   ]
   return (
     <WorkspaceShell session={session} activeSection={section} items={navigation} onSelect={setSection} onChangePassword={onChangePassword} onLogout={onLogout}>
-      {section === 'dashboard' ? <AdminDashboard /> : section === 'students' ? <AdminStudentDirectory /> : section === 'mentors' ? <MentorManagement /> : section === 'reports' ? <RegisterReports /> : <OrientationSettings />}
+      {section === 'dashboard' ? <AdminDashboard userName={`${session.firstName} ${session.surname}`} /> : section === 'students' ? <AdminStudentDirectory /> : section === 'mentors' ? <MentorManagement /> : section === 'reports' ? <RegisterReports /> : <OrientationSettings />}
     </WorkspaceShell>
   )
 }
@@ -232,7 +232,7 @@ function MentorWorkspace({ session, onChangePassword, onLogout }: { session: Ses
     <WorkspaceShell session={session} activeSection={section as MentorSection} items={navigation} onSelect={setSection} onChangePassword={onChangePassword} onLogout={onLogout}>
       {session.groupId === null
         ? <main className="signed-in-panel"><p className="eyebrow">Mentor account</p><h1>Welcome, {session.firstName}</h1><p className="account-warning">No group is assigned. Contact the administrator.</p></main>
-        : section === 'dashboard' ? <MentorDashboard onScan={openScanner} onWarmScanner={() => void preloadAttendanceScanner()} /> : <StudentManagement />}
+        : section === 'dashboard' ? <MentorDashboard onScan={openScanner} onWarmScanner={() => void preloadAttendanceScanner()} /> : <StudentManagement userName={`${session.firstName} ${session.surname}`} />}
     </WorkspaceShell>
   )
 }
