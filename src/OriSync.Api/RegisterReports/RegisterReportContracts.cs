@@ -14,6 +14,15 @@ public sealed record RegisterSummaryResponse(
     int GroupCount,
     RegisterFilter AttendanceStatus);
 
+public sealed record RegisterGroupSummaryResponse(
+    long GroupId,
+    string GroupName,
+    string BadgeColor,
+    int TotalStudents,
+    int PresentStudents,
+    int AbsentStudents,
+    int MatchingStudents);
+
 public sealed record RegisterDocument(
     byte[] Content,
     string ContentType,

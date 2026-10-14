@@ -39,10 +39,11 @@ describe('Role dashboards', () => {
       metrics: { totalStudents: 10, presentToday: 7, absentToday: 3, attendanceRate: 70 },
     })))
 
-    render(<MentorDashboard />)
+    render(<MentorDashboard onScan={vi.fn()} onWarmScanner={vi.fn()} />)
 
     expect(await screen.findByText('70.0%')).toBeInTheDocument()
     expect(screen.getAllByText('RED')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Scan attendance' })).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith('/api/mentor/dashboard', expect.any(Object))
   })
 })

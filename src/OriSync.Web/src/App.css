@@ -3,14 +3,223 @@
   background: #f3f6f8;
 }
 
+.workspace-shell {
+  display: flex;
+  min-height: 100vh;
+  background: #f3f6f8;
+}
+
+.workspace-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.workspace-sidebar {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  display: flex;
+  width: 4.75rem;
+  height: 100vh;
+  flex: 0 0 auto;
+  flex-direction: column;
+  overflow: hidden;
+  color: #e8f2f8;
+  background: #071d2d;
+  box-shadow: 0.4rem 0 1.5rem rgb(7 29 45 / 12%);
+  transition: width 180ms ease;
+}
+
+.workspace-sidebar:hover,
+.workspace-sidebar:focus-within,
+.workspace-sidebar.sidebar-pinned {
+  width: 17rem;
+}
+
+.sidebar-brand-row {
+  display: flex;
+  min-height: 4.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.sidebar-brand-mark,
+.mobile-brand-mark {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #005596;
+  background: #fdb813;
+  font-weight: 900;
+}
+
+.sidebar-brand-name {
+  color: #fff;
+  font-size: 1.08rem;
+  font-weight: 850;
+}
+
+.sidebar-label {
+  visibility: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 120ms ease;
+}
+
+.workspace-sidebar:hover .sidebar-label,
+.workspace-sidebar:focus-within .sidebar-label,
+.workspace-sidebar.sidebar-pinned .sidebar-label,
+.workspace-sidebar.sidebar-mobile-open .sidebar-label {
+  visibility: visible;
+  opacity: 1;
+}
+
+.sidebar-toggle {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 2.25rem;
+  margin-left: auto;
+  place-items: center;
+  border: 0;
+  border-radius: 0.45rem;
+  color: #dcecf5;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.workspace-sidebar:hover .sidebar-toggle,
+.workspace-sidebar:focus-within .sidebar-toggle,
+.workspace-sidebar.sidebar-pinned .sidebar-toggle,
+.workspace-sidebar.sidebar-mobile-open .sidebar-toggle {
+  opacity: 1;
+}
+
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  background: rgb(255 255 255 / 10%);
+}
+
+.sidebar-navigation {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 0.65rem;
+}
+
+.sidebar-link {
+  display: grid;
+  width: 100%;
+  min-height: 3rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  align-items: center;
+  border: 0;
+  border-radius: 0.55rem;
+  padding: 0 0.25rem;
+  color: #bed1dc;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 750;
+  text-align: left;
+}
+
+.sidebar-link .app-icon {
+  justify-self: center;
+}
+
+.sidebar-link:hover,
+.sidebar-link:focus-visible {
+  color: #fff;
+  background: rgb(255 255 255 / 8%);
+  outline: 0;
+}
+
+.sidebar-link.active {
+  color: #fff;
+  background: #005596;
+  box-shadow: inset 0.2rem 0 #fdb813;
+}
+
+.sidebar-account {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: auto;
+  padding: 0.75rem 0.65rem 1rem;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.sidebar-user {
+  display: grid;
+  min-height: 3.4rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  align-items: center;
+  padding: 0 0.25rem 0.65rem;
+}
+
+.sidebar-avatar {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 50%;
+  color: #fff;
+  background: #21465b;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.sidebar-user-details {
+  display: grid;
+  gap: 0.15rem;
+  overflow: hidden;
+}
+
+.sidebar-user-details strong {
+  overflow: hidden;
+  color: #fff;
+  text-overflow: ellipsis;
+}
+
+.sidebar-user-details small {
+  color: #91abb9;
+}
+
+.sidebar-signout {
+  color: #ffb8bc;
+}
+
+.mobile-workspace-header,
+.sidebar-backdrop {
+  display: none;
+}
+
 .top-bar {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   min-height: 4rem;
   padding: 0 1.25rem;
-  color: #fff;
-  background: #005596;
+  color: #18364d;
+  background: #fff;
+  border-bottom: 1px solid #d7e0e5;
+}
+
+.top-bar-tut-logo {
+  width: auto;
+  height: 2.7rem;
+  object-fit: contain;
+}
+
+.top-bar-divider {
+  width: 1px;
+  height: 2rem;
+  background: #d7e0e5;
 }
 
 .brand-mark {
@@ -200,12 +409,17 @@ h2 {
 
 .table-scroll {
   overflow-x: auto;
+  border: 1px solid #d7e0e5;
+  border-radius: 0.7rem;
+  background: #fff;
+  box-shadow: 0 0.35rem 1.1rem rgb(24 54 77 / 6%);
 }
 
 .directory-table {
   width: 100%;
   min-width: 60rem;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .directory-table th,
@@ -218,9 +432,34 @@ h2 {
 
 .directory-table th {
   color: #486472;
+  background: #f6f8fa;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.directory-table tbody tr {
+  animation: table-row-enter 220ms ease both;
+  transition: background 120ms ease;
+}
+
+.directory-table tbody tr:hover {
+  background: #f5f9fc;
+}
+
+.directory-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+@keyframes table-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .directory-table td small,
@@ -282,10 +521,38 @@ h2 {
   gap: 1.25rem;
 }
 
+.report-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .report-filters {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  flex: 1;
+  grid-template-columns: minmax(14rem, 1.5fr) repeat(2, minmax(10rem, 1fr));
   gap: 1rem;
+}
+
+.zip-download-button {
+  flex: 0 0 auto;
+}
+
+.register-summary-line {
+  color: #59727f;
+}
+
+.register-summary-line strong {
+  color: #18364d;
+}
+
+.register-table {
+  min-width: 47rem;
+}
+
+.register-action-cell {
+  text-align: right !important;
 }
 
 .report-download-row {
@@ -378,6 +645,54 @@ h2 {
   margin: 0;
   color: #59727f;
   font-size: 0.9rem;
+}
+
+.scan-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border: 1px solid #b9d6e7;
+  border-left: 0.35rem solid #fdb813;
+  border-radius: 0.75rem;
+  padding: clamp(1.15rem, 3vw, 1.75rem);
+  color: #355565;
+  background: linear-gradient(115deg, #fff 20%, #eaf4f9 100%);
+  box-shadow: 0 0.5rem 1.5rem rgb(24 54 77 / 8%);
+}
+
+.scan-cta h2,
+.scan-cta p {
+  margin: 0;
+}
+
+.scan-cta h2 {
+  margin-bottom: 0.45rem;
+}
+
+.scan-cta-button {
+  display: inline-flex;
+  min-width: 14rem;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 0;
+  border-radius: 0.65rem;
+  padding: 0.9rem 1.35rem;
+  color: #fff;
+  background: #005596;
+  box-shadow: 0 0.7rem 1.5rem rgb(0 85 150 / 22%);
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-weight: 850;
+}
+
+.scan-cta-button:hover,
+.scan-cta-button:focus-visible {
+  background: #004579;
+  outline: 3px solid rgb(0 85 150 / 20%);
+  outline-offset: 2px;
 }
 
 .scanner-navigation-button {
@@ -951,6 +1266,90 @@ h2 {
 }
 
 @media (max-width: 48rem) {
+  .workspace-shell {
+    display: block;
+  }
+
+  .mobile-workspace-header {
+    position: sticky;
+    z-index: 8;
+    top: 0;
+    display: flex;
+    min-height: 3.75rem;
+    align-items: center;
+    gap: 0.65rem;
+    border-bottom: 1px solid #d7e0e5;
+    padding: 0 1rem;
+    color: #18364d;
+    background: rgb(255 255 255 / 96%);
+    backdrop-filter: blur(0.8rem);
+  }
+
+  .mobile-menu-button {
+    display: grid;
+    width: 2.65rem;
+    height: 2.65rem;
+    place-items: center;
+    border: 1px solid #c9d6dd;
+    border-radius: 0.55rem;
+    color: #005596;
+    background: #fff;
+  }
+
+  .mobile-brand-mark {
+    width: 2rem;
+    height: 2rem;
+    flex-basis: 2rem;
+    font-size: 0.85rem;
+  }
+
+  .mobile-brand-name {
+    font-weight: 850;
+  }
+
+  .workspace-sidebar,
+  .workspace-sidebar:hover,
+  .workspace-sidebar:focus-within,
+  .workspace-sidebar.sidebar-pinned {
+    position: fixed;
+    width: min(18rem, calc(100vw - 3rem));
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+  }
+
+  .workspace-sidebar.sidebar-mobile-open {
+    transform: translateX(0);
+  }
+
+  .workspace-sidebar .sidebar-label,
+  .workspace-sidebar .sidebar-toggle {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    z-index: 9;
+    inset: 0;
+    display: block;
+    border: 0;
+    background: rgb(7 29 45 / 55%);
+  }
+
+  .workspace-content .settings-workspace {
+    margin-top: 0;
+  }
+
+  .scan-cta,
+  .report-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scan-cta-button {
+    width: 100%;
+  }
+
   .auth-layout {
     grid-template-columns: 1fr;
     gap: 2rem;
@@ -982,12 +1381,26 @@ h2 {
   .report-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .student-desktop-directory {
+    display: none;
+  }
+
+  .student-mobile-directory {
+    display: grid;
+    gap: 0.75rem;
+  }
 }
 
 @media (max-width: 30rem) {
   .top-bar {
     min-height: 3.5rem;
     padding-inline: 1rem;
+  }
+
+  .top-bar-tut-logo {
+    height: 2.1rem;
+    max-width: 12rem;
   }
 
   .auth-layout {
@@ -1033,6 +1446,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .report-filters {
+    grid-template-columns: 1fr;
+  }
+
   .admin-navigation,
   .pagination {
     flex-direction: column;
@@ -1064,5 +1481,16 @@ h2 {
     margin-top: 0;
     padding-block: 0.75rem;
     background: #f3f6f8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -1,0 +1,31 @@
+{
+  "name": "OriSync Orientation Attendance",
+  "short_name": "OriSync",
+  "description": "Tshwane University of Technology first-year orientation attendance portal.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f9",
+  "theme_color": "#005596",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/orisync-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/orisync-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/orisync-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

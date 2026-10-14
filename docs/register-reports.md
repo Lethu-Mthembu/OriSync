@@ -15,8 +15,12 @@ Administrators can open the Registers workspace and select:
 
 - any orientation still retained in the database;
 - any non-future weekday in that orientation's configured date range;
-- one group for a PDF, or all groups for a ZIP; and
 - `All`, `Present` or `Absent`.
+
+The selected day displays one table row per orientation group with total,
+present, absent and filter-matching counts. Each non-empty row has its own PDF
+download. A separate button downloads one ZIP for every group with matching
+rows.
 
 An all-groups ZIP contains one PDF for each group that has at least one row
 matching the selected filter. Empty group files are omitted. If the entire
@@ -70,6 +74,7 @@ only in the filename, not in the document.
 - `GET /api/mentor/registers/today/summary`
 - `GET /api/mentor/registers/today`
 - `GET /api/admin/registers/summary`
+- `GET /api/admin/registers/groups`
 - `GET /api/admin/registers/pdf`
 - `GET /api/admin/registers/zip`
 

@@ -58,6 +58,12 @@ Feature 10 adds current mentor registers and historical admin exports. It
 generates TUT-branded A4 landscape PDFs for one group and ZIP archives for all
 matching groups without storing generated files.
 
+Feature 11 adds an installable PWA shell, role-specific responsive sidebars,
+the mentor scan-first dashboard and a consistent table system for students,
+mentors and historical group registers. Cached application assets never turn
+attendance into an offline workflow; authenticated data and mutations still
+require the ASP.NET Core backend.
+
 ## Prerequisites
 
 - .NET SDK 10.0.400 or a compatible 10.0 feature-band update
@@ -169,3 +175,5 @@ See [dashboards and directories](docs/dashboards-directories.md) for Feature 9
 metric definitions, group ranking and attendance-filter rules.
 See [register reports](docs/register-reports.md) for Feature 10 access rules,
 PDF layout, filters, filenames and ZIP behavior.
+See [PWA and responsive UI](docs/pwa-responsive-ui.md) for Feature 11 navigation,
+responsive behavior, caching boundaries and visual-system rules.

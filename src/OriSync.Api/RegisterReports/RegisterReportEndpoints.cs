@@ -57,6 +57,23 @@ public static class RegisterReportEndpoints
                 attendanceStatus ?? RegisterFilter.All,
                 cancellationToken)));
 
+        admin.MapGet("/groups", async (
+            long orientationId,
+            DateOnly date,
+            RegisterFilter? attendanceStatus,
+            HttpContext context,
+            RegisterReportService service,
+            CancellationToken cancellationToken) =>
+        {
+            var summaries = await service.GetAdminGroupSummariesAsync(
+                orientationId,
+                date,
+                attendanceStatus ?? RegisterFilter.All,
+                cancellationToken);
+            PreventCaching(context.Response);
+            return Results.Ok(summaries);
+        });
+
         admin.MapGet("/pdf", async (
             long orientationId,
             DateOnly date,
