@@ -11,7 +11,7 @@ describe('Register reports', () => {
     vi.unstubAllGlobals()
   })
 
-  it('downloads one ZIP for every matching group', async () => {
+  it('downloads the selected ZIP and exposes independent row PDF filters', async () => {
     const paths: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input)
@@ -29,6 +29,14 @@ describe('Register reports', () => {
           },
         })
       }
+      if (path.startsWith('/api/admin/registers/pdf?')) {
+        return new Response(new Blob(['pdf']), {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="RED-2026-10-13-14h30-Present.pdf"',
+          },
+        })
+      }
       throw new Error(`Unexpected request: ${path}`)
     }))
     vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn().mockReturnValue('blob:register'), revokeObjectURL: vi.fn() })
@@ -36,12 +44,20 @@ describe('Register reports', () => {
     const user = userEvent.setup()
 
     render(<RegisterReports />)
-    expect(await screen.findByRole('button', { name: 'Download RED PDF' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Download all students for RED as PDF' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Download present students for RED as PDF' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Download absent students for RED as PDF' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Download present students for BLUE as PDF' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Download absent students for BLUE as PDF' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: 'Download all as ZIP' }))
+    await user.click(screen.getByRole('button', { name: 'Download present students for RED as PDF' }))
 
     expect(paths.some((path) => path.includes('/api/admin/registers/zip?') &&
       path.includes('orientationId=1') && path.includes('date=2026-10-13') &&
       path.includes('attendanceStatus=All'))).toBe(true)
+    expect(paths.some((path) => path.includes('/api/admin/registers/pdf?') &&
+      path.includes('orientationId=1') && path.includes('date=2026-10-13') &&
+      path.includes('attendanceStatus=Present') && path.includes('groupId=1'))).toBe(true)
   })
 
   it('disables a download whose selected filter has no rows', async () => {
@@ -52,14 +68,22 @@ describe('Register reports', () => {
         return response({ rowCount: 0, groupCount: 0, attendanceStatus: 'All' })
       }
       if (path.startsWith('/api/admin/registers/groups?')) {
-        return response(groupSummaries.map((group) => ({ ...group, matchingStudents: 0 })))
+        return response(groupSummaries.map((group) => ({
+          ...group,
+          totalStudents: 0,
+          presentStudents: 0,
+          absentStudents: 0,
+          matchingStudents: 0,
+        })))
       }
       throw new Error(`Unexpected request: ${path}`)
     }))
 
     render(<RegisterReports />)
 
-    expect(await screen.findByRole('button', { name: 'Download RED PDF' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Download all students for RED as PDF' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Download present students for RED as PDF' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Download absent students for RED as PDF' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Download all as ZIP' })).toBeDisabled()
   })
 })
