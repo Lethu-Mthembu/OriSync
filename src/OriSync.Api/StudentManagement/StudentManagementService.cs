@@ -361,7 +361,10 @@ public sealed partial class StudentManagementService(
         if (changed.Count != 0)
         {
             Apply(enrollment.Student, values);
-            enrollment.QrVersion++;
+            if (QrFieldsChanged(changed))
+            {
+                enrollment.QrVersion++;
+            }
             var now = timeProvider.GetUtcNow();
             ReplaceEmails(enrollment.Student, values, now);
             AddAudit(accountId, "StudentUpdated", enrollment.Id, now, new { fields = changed });
@@ -600,11 +603,13 @@ public sealed partial class StudentManagementService(
         {
             throw Invalid($"Student email must be {studentEmail}.");
         }
-        var personalEmail = string.IsNullOrWhiteSpace(request.PersonalEmail)
-            ? null
-            : ValidateEmail(request.PersonalEmail, "Personal email");
-        if (personalEmail is not null &&
-            string.Equals(studentEmail, personalEmail, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(request.PersonalEmail))
+        {
+            throw Invalid("Personal email is required.");
+        }
+
+        var personalEmail = ValidateEmail(request.PersonalEmail, "Personal email");
+        if (string.Equals(studentEmail, personalEmail, StringComparison.OrdinalIgnoreCase))
         {
             throw Invalid("Student email and personal email must be different.");
         }
@@ -764,6 +769,12 @@ public sealed partial class StudentManagementService(
         return fields;
     }
 
+    private static bool QrFieldsChanged(IReadOnlyCollection<string> fields) =>
+        fields.Contains("studentNumber", StringComparer.Ordinal) ||
+        fields.Contains("fullNames", StringComparer.Ordinal) ||
+        fields.Contains("surname", StringComparer.Ordinal) ||
+        fields.Contains("studentEmail", StringComparer.Ordinal);
+
     private static void Apply(Person person, ValidatedStudent values)
     {
         person.InstitutionNumber = values.StudentNumber;
@@ -858,7 +869,7 @@ public sealed partial class StudentManagementService(
         string FullNames,
         string Surname,
         string StudentEmail,
-        string? PersonalEmail,
+        string PersonalEmail,
         StudentAgeGroup AgeGroup,
         Gender Gender,
         Ethnicity Ethnicity);

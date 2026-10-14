@@ -15,3 +15,7 @@ public sealed record StudentQrCodeDocument(
     byte[] Content,
     string FileName,
     string Url);
+
+public sealed record StudentQrEmailQueuedResponse(
+    string RecipientEmail,
+    string Message);

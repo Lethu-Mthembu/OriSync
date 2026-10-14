@@ -7,7 +7,7 @@ public sealed record SaveStudentRequest(
     string FullNames,
     string Surname,
     string StudentEmail,
-    string? PersonalEmail,
+    string PersonalEmail,
     StudentAgeGroup AgeGroup,
     Gender Gender,
     Ethnicity Ethnicity);

@@ -22,12 +22,17 @@ describe('App authentication', () => {
 
   it('shows the shared sign-in page when no session exists', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(null, 401)))
+    const user = userEvent.setup()
 
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mentor forgot password' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Admin recovery' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text')
+    expect(screen.getByRole('button', { name: 'Hide password' })).toBeInTheDocument()
   })
 
   it('restores an authenticated session', async () => {
@@ -91,7 +96,7 @@ describe('App authentication', () => {
     await user.click(await screen.findByRole('button', { name: 'Mentor forgot password' }))
 
     expect(screen.getByRole('heading', { name: 'Reset password' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Mentor number')).toBeInTheDocument()
+    expect(screen.getByLabelText('Student number')).toBeInTheDocument()
     expect(screen.getByLabelText('Login email')).toBeInTheDocument()
     expect(screen.queryByLabelText('Reset code')).not.toBeInTheDocument()
   })
@@ -108,7 +113,7 @@ describe('App authentication', () => {
 
     render(<App />)
     await user.click(await screen.findByRole('button', { name: 'Mentor forgot password' }))
-    await user.type(screen.getByLabelText('Mentor number'), '223450002')
+    await user.type(screen.getByLabelText('Student number'), '223450002')
     await user.type(screen.getByLabelText('Login email'), 'mentor@orisync.test')
     await user.click(screen.getByRole('button', { name: 'Send reset code' }))
 

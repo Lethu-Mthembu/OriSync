@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { getError, postJson } from './api'
 import type { AuthView, Session } from './types'
+import { PasswordField } from '../components/PasswordField'
 
 const passwordPattern = '(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}'
 
@@ -42,7 +43,7 @@ export function LoginForm({
         <h2>Sign in</h2>
       </div>
       <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="username" />
-      <Field label="Password" type="password" value={password} onChange={setPassword} autoComplete="current-password" minimumLength={8} />
+      <PasswordField label="Password" value={password} onChange={setPassword} autoComplete="current-password" />
       <ErrorMessage message={error} />
       <button className="primary-button" disabled={submitting} type="submit">
         {submitting ? 'Signing in…' : 'Sign in'}
@@ -136,16 +137,16 @@ export function MentorResetForm({ onView }: { onView: (view: AuthView) => void }
         <p className="form-kicker">Mentor account</p>
         <h2>Reset password</h2>
         <p className="form-note">
-          Enter your nine-digit mentor number and login email. OriSync will send a one-time code to that email.
+          Enter your nine-digit student number and login email. OriSync will send a one-time code to that email.
         </p>
       </div>
-      <Field label="Mentor number" value={mentorNumber} onChange={setMentorNumber} inputMode="numeric" pattern="2[0-9]{8}" />
+      <Field label="Student number" value={mentorNumber} onChange={setMentorNumber} inputMode="numeric" pattern="2[0-9]{8}" />
       <Field label="Login email" type="email" value={email} onChange={setEmail} autoComplete="username" />
       {codeRequested && (
         <>
           <Field label="Reset code" value={code} onChange={setCode} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maximumLength={6} />
-          <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
-          <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
+          <PasswordField label="New password" value={password} onChange={setPassword} autoComplete="new-password" pattern={passwordPattern} />
+          <PasswordField label="Confirm new password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" pattern={passwordPattern} />
           <p className="form-note">Use at least 8 characters with an uppercase letter, lowercase letter and special character.</p>
         </>
       )}
@@ -215,7 +216,7 @@ export function AdminRecoveryForm({ onView }: { onView: (view: AuthView) => void
       </div>
       <Field label="Admin email" type="email" value={email} onChange={setEmail} autoComplete="username" />
       <Field label="Recovery code" value={recoveryCode} onChange={setRecoveryCode} autoComplete="off" />
-      <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
+      <PasswordField label="New password" value={password} onChange={setPassword} autoComplete="new-password" pattern={passwordPattern} />
       <p className="form-note">Use at least 8 characters with an uppercase letter, lowercase letter and special character.</p>
       <ErrorMessage message={error} />
       <button className="primary-button" disabled={submitting} type="submit">
@@ -274,9 +275,9 @@ export function ChangePasswordForm({
         <h2>{forced ? 'Change your temporary password' : 'Change password'}</h2>
         <p className="form-note">Changing your password signs out every active session.</p>
       </div>
-      <Field label="Current password" type="password" value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" minimumLength={8} />
-      <Field label="New password" type="password" value={newPassword} onChange={setNewPassword} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
-      <Field label="Confirm new password" type="password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" minimumLength={8} pattern={passwordPattern} />
+      <PasswordField label="Current password" value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" />
+      <PasswordField label="New password" value={newPassword} onChange={setNewPassword} autoComplete="new-password" pattern={passwordPattern} />
+      <PasswordField label="Confirm new password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" pattern={passwordPattern} />
       <p className="form-note">Use at least 8 characters with an uppercase letter, lowercase letter and special character.</p>
       <ErrorMessage message={error} />
       <button className="primary-button" disabled={submitting} type="submit">

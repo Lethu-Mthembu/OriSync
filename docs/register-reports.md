@@ -52,7 +52,7 @@ Rows are ordered by student number ascending. The columns are:
 5. ethnicity; and
 6. the actual attendance status, `Present` or `Absent`.
 
-Student email addresses, mentor numbers, capture methods and timestamps are not
+Student email addresses, mentor student numbers, capture methods and timestamps are not
 printed. Long names are reduced to a smaller font within their cells rather
 than allowed to overlap adjacent columns.
 

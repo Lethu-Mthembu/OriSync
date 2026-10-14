@@ -53,7 +53,7 @@ hop only; forwarded client IP addresses are ignored.
 | POST | `/api/auth/activity` | Required | Record real user interaction |
 | POST | `/api/auth/logout` | Required | Revoke the current session |
 | POST | `/api/auth/change-password` | Required | Change password and revoke all sessions |
-| POST | `/api/auth/mentor-password-reset/request` | Anonymous | Request a mentor reset code using mentor number and login email |
+| POST | `/api/auth/mentor-password-reset/request` | Anonymous | Request a mentor reset code using the mentor's student number and login email |
 | POST | `/api/auth/mentor-password-reset/complete` | Anonymous | Verify the code and replace the mentor password |
 | POST | `/api/auth/recover-admin` | Anonymous | Recover the sole admin using a one-time code |
 
@@ -61,7 +61,7 @@ Every POST requires `X-CSRF-TOKEN`, including anonymous POSTs.
 
 ## Mentor password recovery
 
-Mentor recovery requires the exact nine-digit mentor number and login email.
+Mentor recovery requires the mentor's exact nine-digit student number and login email.
 The request endpoint always returns the same accepted response for malformed,
 unknown, rate-limited and delivery-failed requests and takes at least 500 ms to
 reduce account-enumeration timing differences. A numeric code is queued only for

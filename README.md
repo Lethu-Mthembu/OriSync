@@ -102,8 +102,8 @@ terminates public HTTPS at its reverse proxy.
 
 ## Database schema
 
-The current schema contains thirteen PostgreSQL tables through Entity Framework
-Core migrations: ten domain tables, password-reset OTP and email-outbox tables,
+The current schema contains fourteen PostgreSQL tables through Entity Framework
+Core migrations, including durable password-reset and student-QR email outboxes
 and the shared ASP.NET Core Data Protection key ring. Database identifiers use
 lowercase snake case, foreign keys are indexed and row-level security is enabled
 without client policies. OriSync accesses Neon PostgreSQL only through the

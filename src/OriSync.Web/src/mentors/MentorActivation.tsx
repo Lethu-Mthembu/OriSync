@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { getError, postJson } from '../auth/api'
 import type { MentorActivationDetails } from './types'
+import { PasswordField } from '../components/PasswordField'
 
 const passwordPattern = '(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}'
 
@@ -89,9 +90,9 @@ export function MentorActivation({ invitationId, token }: { invitationId: number
         <label className="field">Login email<input type="email" value={details.email} disabled /></label>
         <label className="field">First name<input required maxLength={100} autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
         <label className="field">Surname<input required maxLength={100} autoComplete="family-name" value={surname} onChange={(event) => setSurname(event.target.value)} /></label>
-        <label className="field">Mentor number<input required inputMode="numeric" pattern="2[0-9]{8}" maxLength={9} value={mentorNumber} onChange={(event) => setMentorNumber(event.target.value.replace(/\D/g, '').slice(0, 9))} /></label>
-        <label className="field">Password<input required type="password" minLength={8} pattern={passwordPattern} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-        <label className="field">Confirm password<input required type="password" minLength={8} pattern={passwordPattern} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>
+        <label className="field">Student number<input required inputMode="numeric" pattern="2[0-9]{8}" maxLength={9} value={mentorNumber} onChange={(event) => setMentorNumber(event.target.value.replace(/\D/g, '').slice(0, 9))} /></label>
+        <PasswordField label="Password" value={password} onChange={setPassword} autoComplete="new-password" pattern={passwordPattern} />
+        <PasswordField label="Confirm password" value={confirmation} onChange={setConfirmation} autoComplete="new-password" pattern={passwordPattern} />
         <p className="form-note">Use at least 8 characters with an uppercase letter, lowercase letter and special character.</p>
         <button className="primary-button" type="submit" disabled={submitting}>{submitting ? 'Activating…' : 'Activate account'}</button>
       </form>

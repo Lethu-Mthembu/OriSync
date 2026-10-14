@@ -10,7 +10,7 @@ Students are added individually. Each student stores:
 - a globally unique nine-digit student number matching `^2[0-9]{8}$`;
 - full names in one field and surname in a separate field;
 - generated initials from every whitespace-separated full name;
-- a student email derived as `{student number}@tut4life.ac.za` and an optional
+- a student email derived as `{student number}@tut4life.ac.za` and a mandatory,
   globally unique personal email;
 - age group `C1` through `C5`;
 - gender `Male`, `Female` or `Other`; and
@@ -23,7 +23,7 @@ apostrophes and the common Unicode hyphen variants are accepted; digits and
 other punctuation are rejected.
 
 Student, personal and mentor login email addresses share one uniqueness
-boundary. Student numbers and mentor numbers also share one uniqueness boundary
+boundary. Student numbers belonging to students and mentors also share one uniqueness boundary
 because both are stored on the same person identity table.
 
 The registration and editing forms display the derived student email as a
@@ -73,10 +73,11 @@ correct effective assignment.
 
 ## Editing and concurrency
 
-Any mentor in the current group may edit every student field. Changing any
-student detail increments the QR version, so the previous signed QR becomes
-invalid after Feature 7 generates the replacement. Group-only movement does
-not change the QR version.
+Any mentor in the current group may edit every student field. Changing the
+student number, full names, surname or derived student email increments the QR
+version and invalidates the previous signed QR. Demographic and personal-email
+changes do not alter the signed QR payload, so those changes retain the current
+QR. Group-only movement also does not change the QR version.
 
 Concurrent edits use last-write-wins, as specified. This avoids conflict UI,
 but one mentor can silently overwrite another mentor's recent edit. Creation,
@@ -94,3 +95,9 @@ supports text search, group filtering, an `UNASSIGNED` filter, today's Present
 or Absent status, and page sizes of 10, 20, 50 or 100 rows. The default is 10.
 The mentor directory supports the same attendance-status filter within the
 authenticated mentor's group. Filtering occurs before server-side pagination.
+
+Mentors may queue the current QR as a PNG attachment to the student's current
+personal email from the QR dialog. Delivery uses a durable outbox and Resend.
+Queued mail is discarded if the student is removed, the QR version changes or
+the personal email changes before dispatch; this prevents stale or misdirected
+QR delivery.

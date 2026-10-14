@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { getError, sendJson } from '../auth/api'
 import type { Orientation, OrientationDraft, OrientationGroup } from './types'
+import { useConfirmation } from '../components/useConfirmation'
 
 const knownColours: Record<string, string> = {
   BLACK: '#212121',
@@ -224,9 +225,15 @@ function OrientationCard({
     attendanceOpensAt: orientation.attendanceOpensAt.slice(0, 5),
     attendanceClosesAt: orientation.attendanceClosesAt.slice(0, 5),
   }))
+  const { confirm, confirmationDialog } = useConfirmation()
 
   async function save(event: FormEvent) {
     event.preventDefault()
+    if (!await confirm({
+      title: 'Save orientation changes?',
+      message: `Update the dates, operating hours or name for ${orientation.name}?`,
+      confirmLabel: 'Save changes',
+    })) return
     const updated = await mutate(`/api/admin/orientations/${orientation.id}`, 'PUT', draft)
     if (updated && updated !== 'deleted') setEditing(false)
   }
@@ -236,7 +243,12 @@ function OrientationCard({
     const question = orientation.isActive
       ? `Deactivate ${orientation.name}?`
       : `Activate ${orientation.name} and replace the current active orientation?`
-    if (!window.confirm(question)) return
+    if (!await confirm({
+      title: orientation.isActive ? 'Deactivate orientation?' : 'Activate orientation?',
+      message: question,
+      confirmLabel: orientation.isActive ? 'Deactivate' : 'Activate',
+      tone: orientation.isActive ? 'danger' : 'default',
+    })) return
     await mutate(`/api/admin/orientations/${orientation.id}/${action}`, 'POST')
   }
 
@@ -281,6 +293,7 @@ function OrientationCard({
       )}
 
       <GroupManager orientation={orientation} mutate={mutate} />
+      {confirmationDialog}
     </article>
   )
 }
@@ -363,6 +376,7 @@ function GroupRow({
 }) {
   const [name, setName] = useState(group.name)
   const [badgeColor, setBadgeColor] = useState(group.badgeColor)
+  const { confirm, confirmationDialog } = useConfirmation()
   const path = `/api/admin/orientations/${orientationId}/groups/${group.id}`
 
   const textColour = useMemo(() => {
@@ -374,17 +388,32 @@ function GroupRow({
   }, [badgeColor])
 
   async function save() {
+    if (!await confirm({
+      title: 'Save group changes?',
+      message: `Update ${group.name} Group to ${name.trim().toUpperCase()} with the selected badge colour?`,
+      confirmLabel: 'Save changes',
+    })) return
     await mutate(path, 'PUT', { name, badgeColor })
   }
 
   async function toggle() {
     const action = group.isActive ? 'deactivate' : 'activate'
-    if (!window.confirm(`${group.isActive ? 'Deactivate' : 'Activate'} ${group.name} Group?`)) return
+    if (!await confirm({
+      title: `${group.isActive ? 'Deactivate' : 'Activate'} group?`,
+      message: `${group.isActive ? 'Deactivate' : 'Activate'} ${group.name} Group?`,
+      confirmLabel: group.isActive ? 'Deactivate' : 'Activate',
+      tone: group.isActive ? 'danger' : 'default',
+    })) return
     await mutate(`${path}/${action}`, 'POST')
   }
 
   async function remove() {
-    if (!window.confirm(`Delete ${group.name} Group? This cannot be undone.`)) return
+    if (!await confirm({
+      title: 'Delete group permanently?',
+      message: `Delete ${group.name} Group? This cannot be undone.`,
+      confirmLabel: 'Delete permanently',
+      tone: 'danger',
+    })) return
     await mutate(path, 'DELETE')
   }
 
@@ -400,6 +429,7 @@ function GroupRow({
       <button className="text-button" type="button" onClick={() => void save()}>Save</button>
       <button className="text-button" type="button" onClick={() => void toggle()}>{group.isActive ? 'Deactivate' : 'Activate'}</button>
       {group.canDelete && <button className="danger-text-button" type="button" onClick={() => void remove()}>Delete</button>}
+      {confirmationDialog}
     </div>
   )
 }

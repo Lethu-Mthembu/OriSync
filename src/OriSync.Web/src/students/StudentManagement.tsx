@@ -3,6 +3,7 @@ import { getError, sendJson } from '../auth/api'
 import type { AttendanceMutationResponse, AttendanceStatus } from '../attendance/types'
 import { downloadResponse } from '../registers/download'
 import type { RegisterFilter, RegisterSummary } from '../registers/types'
+import { useConfirmation } from '../components/useConfirmation'
 import type {
   Ethnicity,
   Gender,
@@ -26,7 +27,7 @@ const emptyStudent: StudentFormValues = {
   fullNames: '',
   surname: '',
   studentEmail: '',
-  personalEmail: null,
+  personalEmail: '',
   ageGroup: 'C1',
   gender: 'Male',
   ethnicity: 'African',
@@ -46,8 +47,10 @@ export function StudentManagement() {
   const [qrStudent, setQrStudent] = useState<StudentDirectoryItem | null>(null)
   const [qrImageUrl, setQrImageUrl] = useState('')
   const [qrLoading, setQrLoading] = useState(false)
+  const [qrSending, setQrSending] = useState(false)
   const [registerSummary, setRegisterSummary] = useState<RegisterSummary | null>(null)
   const [registerDownloading, setRegisterDownloading] = useState(false)
+  const { confirm, confirmationDialog } = useConfirmation()
 
   const load = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
@@ -89,7 +92,12 @@ export function StudentManagement() {
   }, [qrImageUrl])
 
   async function remove(student: StudentDirectoryItem) {
-    if (!window.confirm(`Remove ${student.fullNames} ${student.surname} from ${student.groupName} Group?`)) return
+    if (!await confirm({
+      title: 'Remove student from group?',
+      message: `Remove ${student.fullNames} ${student.surname} from ${student.groupName} Group? The student will become UNASSIGNED.`,
+      confirmLabel: 'Remove student',
+      tone: 'danger',
+    })) return
     const response = await sendJson(`/api/mentor/students/${student.enrollmentId}/remove`, 'POST')
     if (!response.ok) {
       setError(await getError(response))
@@ -106,8 +114,22 @@ export function StudentManagement() {
     void load(false)
   }
 
+  function studentSaved(result: StudentMutationResponse, mode: 'create' | 'edit', qrChanged: boolean) {
+    const message = mode === 'create'
+      ? `${result.student.fullNames} ${result.student.surname} was registered as Present.`
+      : qrChanged
+        ? `${result.student.fullNames} ${result.student.surname} was updated. The previous QR code is now expired.`
+        : `${result.student.fullNames} ${result.student.surname} was updated. The existing QR code remains valid.`
+    success(message)
+    if (mode === 'create' || qrChanged) void showQr(result.student)
+  }
+
   async function correctAttendance(student: StudentDirectoryItem, status: AttendanceStatus) {
-    if (!window.confirm(`Mark ${student.fullNames} ${student.surname} as ${status}?`)) return
+    if (!await confirm({
+      title: `Mark student ${status}?`,
+      message: `Mark ${student.fullNames} ${student.surname} as ${status}? The last submitted status will replace the current one.`,
+      confirmLabel: `Mark ${status}`,
+    })) return
     setError('')
     const response = await sendJson(`/api/mentor/attendance/${student.enrollmentId}`, 'PUT', { status })
     if (!response.ok) {
@@ -174,6 +196,28 @@ export function StudentManagement() {
     }
   }
 
+  async function emailQr() {
+    if (!qrStudent?.personalEmail) return
+    if (!await confirm({
+      title: 'Send QR code?',
+      message: `Send ${qrStudent.fullNames} ${qrStudent.surname}'s QR code to ${qrStudent.personalEmail}? Verify this address before continuing.`,
+      confirmLabel: 'Send QR code',
+    })) return
+
+    setQrSending(true)
+    setError('')
+    try {
+      const response = await sendJson(`/api/mentor/students/${qrStudent.enrollmentId}/qr/email`, 'POST')
+      if (!response.ok) throw new Error(await getError(response))
+      const payload = (await response.json()) as { message: string }
+      setNotice(payload.message)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The QR email could not be queued.')
+    } finally {
+      setQrSending(false)
+    }
+  }
+
   function closeQr() {
     if (qrImageUrl) URL.revokeObjectURL(qrImageUrl)
     setQrImageUrl('')
@@ -207,9 +251,9 @@ export function StudentManagement() {
 
       {error && <p className="error-message" role="alert">{error}</p>}
       {notice && <p className="success-message" role="status">{notice}</p>}
-      {adding && <StudentOnboarding onCancel={() => setAdding(false)} onSuccess={success} onError={setError} />}
-      {editing && <StudentForm mode="edit" initial={editing} onCancel={() => setEditing(null)} onSuccess={success} onError={setError} />}
-      {qrStudent && <QrCodeDialog student={qrStudent} imageUrl={qrImageUrl} loading={qrLoading} onClose={closeQr} onDownload={() => void downloadQr()} />}
+      {adding && <StudentOnboarding onCancel={() => setAdding(false)} onSuccess={success} onStudentSaved={studentSaved} onError={setError} />}
+      {editing && <StudentForm mode="edit" initial={editing} onCancel={() => setEditing(null)} onSuccess={studentSaved} onError={setError} />}
+      {qrStudent && <QrCodeDialog student={qrStudent} imageUrl={qrImageUrl} loading={qrLoading} sending={qrSending} onClose={closeQr} onDownload={() => void downloadQr()} onSend={() => void emailQr()} />}
 
       <section className="settings-card directory-card">
         <div className="directory-filters student-filters">
@@ -227,11 +271,12 @@ export function StudentManagement() {
 
         <div className="pagination"><button className="secondary-button" type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {directory?.page ?? page} of {Math.max(directory?.totalPages ?? 0, 1)}</span><button className="secondary-button" type="button" disabled={!directory || page >= directory.totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></div>
       </section>
+      {confirmationDialog}
     </main>
   )
 }
 
-function StudentOnboarding({ onCancel, onSuccess, onError }: { onCancel: () => void; onSuccess: (message: string) => void; onError: (message: string) => void }) {
+function StudentOnboarding({ onCancel, onSuccess, onStudentSaved, onError }: { onCancel: () => void; onSuccess: (message: string) => void; onStudentSaved: (result: StudentMutationResponse, mode: 'create' | 'edit', qrChanged: boolean) => void; onError: (message: string) => void }) {
   const [number, setNumber] = useState('')
   const [lookup, setLookup] = useState<StudentLookupResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -263,31 +308,43 @@ function StudentOnboarding({ onCancel, onSuccess, onError }: { onCancel: () => v
     <section className="settings-card onboarding-card">
       <div><p className="form-kicker">Step 1</p><h2>Find the student number</h2><p className="form-note">Exact lookup prevents duplicate student identities.</p></div>
       <form className="lookup-form" onSubmit={(event) => void find(event)}><label className="field">Student number<input required inputMode="numeric" pattern="2[0-9]{8}" maxLength={9} value={number} onChange={(event) => { setNumber(event.target.value.replace(/\D/g, '').slice(0, 9)); setLookup(null) }} /></label><button className="primary-button" disabled={loading} type="submit">{loading ? 'Checking…' : 'Continue'}</button><button className="secondary-button" type="button" onClick={onCancel}>Cancel</button></form>
-      {lookup?.match === 'New' && <StudentForm mode="create" initial={{ ...emptyStudent, studentNumber: number }} onCancel={onCancel} onSuccess={onSuccess} onError={onError} />}
+      {lookup?.match === 'New' && <StudentForm mode="create" initial={{ ...emptyStudent, studentNumber: number }} onCancel={onCancel} onSuccess={onStudentSaved} onError={onError} />}
       {lookup?.match === 'Unassigned' && <div className="lookup-result"><p>{lookup.message}</p><button className="primary-button" disabled={loading} type="button" onClick={() => void onboard()}>Confirm onboarding</button></div>}
       {(lookup?.match === 'Assigned' || lookup?.match === 'Unavailable') && <p className="account-warning">{lookup.message}</p>}
     </section>
   )
 }
 
-function StudentForm({ mode, initial, onCancel, onSuccess, onError }: { mode: 'create' | 'edit'; initial: StudentFormValues & { enrollmentId?: number }; onCancel: () => void; onSuccess: (message: string) => void; onError: (message: string) => void }) {
+function StudentForm({ mode, initial, onCancel, onSuccess, onError }: { mode: 'create' | 'edit'; initial: StudentFormValues & { enrollmentId?: number; qrVersion?: number }; onCancel: () => void; onSuccess: (result: StudentMutationResponse, mode: 'create' | 'edit', qrChanged: boolean) => void; onError: (message: string) => void }) {
   const [draft, setDraft] = useState<StudentFormValues>({
     ...initial,
     studentEmail: studentEmailFor(initial.studentNumber),
   })
   const [saving, setSaving] = useState(false)
+  const { confirm, confirmationDialog } = useConfirmation()
   async function submit(event: FormEvent) {
     event.preventDefault()
+    const qrChanged = mode === 'create' ||
+      draft.studentNumber !== initial.studentNumber ||
+      draft.fullNames.trim() !== initial.fullNames.trim() ||
+      draft.surname.trim() !== initial.surname.trim() ||
+      draft.studentEmail !== initial.studentEmail
+    if (mode === 'edit' && !await confirm({
+      title: 'Save student changes?',
+      message: qrChanged
+        ? 'These changes will expire the student’s previous QR code and create a replacement.'
+        : 'These changes will update the student profile. The existing QR code will remain valid.',
+      confirmLabel: 'Save changes',
+    })) return
     setSaving(true)
     onError('')
     const path = mode === 'create' ? '/api/mentor/students' : `/api/mentor/students/${initial.enrollmentId}`
-    const response = await sendJson(path, mode === 'create' ? 'POST' : 'PUT', { ...draft, personalEmail: draft.personalEmail || null })
+    const response = await sendJson(path, mode === 'create' ? 'POST' : 'PUT', { ...draft, personalEmail: draft.personalEmail })
     if (!response.ok) onError(await getError(response))
     else {
       const result = (await response.json()) as StudentMutationResponse
-      onSuccess(mode === 'create'
-        ? `${result.student.fullNames} ${result.student.surname} was registered as Present.`
-        : `${result.student.fullNames} ${result.student.surname} was updated. Download a replacement QR code.`)
+      const actualQrChanged = mode === 'create' || result.student.qrVersion !== initial.qrVersion
+      onSuccess(result, mode, actualQrChanged)
     }
     setSaving(false)
   }
@@ -300,12 +357,13 @@ function StudentForm({ mode, initial, onCancel, onSuccess, onError }: { mode: 'c
         <label className="field field-wide">Full names<input required maxLength={100} value={draft.fullNames} onChange={(event) => setDraft({ ...draft, fullNames: event.target.value })} /></label>
         <label className="field">Surname<input required maxLength={100} value={draft.surname} onChange={(event) => setDraft({ ...draft, surname: event.target.value })} /></label>
         <label className="field field-wide">Student email<input required readOnly type="email" maxLength={254} value={draft.studentEmail} /><span className="form-note">Generated from the student number.</span></label>
-        <label className="field field-wide">Personal email <span className="optional-label">Optional</span><input type="email" maxLength={254} value={draft.personalEmail ?? ''} onChange={(event) => setDraft({ ...draft, personalEmail: event.target.value || null })} /></label>
+        <label className="field field-wide">Personal email<input required type="email" maxLength={254} value={draft.personalEmail ?? ''} onChange={(event) => setDraft({ ...draft, personalEmail: event.target.value })} /><span className="form-note">The student QR code can be sent only to this address.</span></label>
         <label className="field">Age group<select value={draft.ageGroup} onChange={(event) => setDraft({ ...draft, ageGroup: event.target.value as StudentAgeGroup })}>{([['C1', '16–18'], ['C2', '19–21'], ['C3', '22–24'], ['C4', '25–27'], ['C5', '28 and above']] as Array<[StudentAgeGroup, string]>).map(([value, label]) => <option key={value} value={value}>{value} ({label})</option>)}</select></label>
         <label className="field">Gender<select value={draft.gender} onChange={(event) => setDraft({ ...draft, gender: event.target.value as Gender })}>{(['Male', 'Female', 'Other'] as Gender[]).map((value) => <option key={value}>{value}</option>)}</select></label>
         <label className="field">Ethnicity<select value={draft.ethnicity} onChange={(event) => setDraft({ ...draft, ethnicity: event.target.value as Ethnicity })}>{(['White', 'African', 'Coloured', 'Indian', 'Other'] as Ethnicity[]).map((value) => <option key={value}>{value}</option>)}</select></label>
       </div>
       <div className="button-row compact-row"><button className="primary-button" disabled={saving} type="submit">{saving ? 'Saving…' : mode === 'create' ? 'Register as Present' : 'Save changes'}</button><button className="secondary-button" type="button" onClick={onCancel}>Cancel</button></div>
+      {confirmationDialog}
     </form>
   )
 }
@@ -327,6 +385,6 @@ function Actions({ student, onEdit, onRemove, onQr, onAttendance }: StudentActio
   return <div className="row-actions"><button className="attendance-action" disabled={student.isIncomingTransfer || student.attendanceStatus === 'Present'} type="button" onClick={() => onAttendance(student, 'Present')}>Mark Present</button><button className="attendance-action" disabled={student.isIncomingTransfer || student.attendanceStatus === 'Absent'} type="button" onClick={() => onAttendance(student, 'Absent')}>Mark Absent</button><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onQr(student)}>QR code</button><button className="text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onEdit(student)}>Edit</button><button className="danger-text-button" disabled={student.isIncomingTransfer} type="button" onClick={() => onRemove(student)}>Remove</button>{student.isIncomingTransfer && <small>Available tomorrow</small>}</div>
 }
 
-function QrCodeDialog({ student, imageUrl, loading, onClose, onDownload }: { student: StudentDirectoryItem; imageUrl: string; loading: boolean; onClose: () => void; onDownload: () => void }) {
-  return <div className="qr-dialog-backdrop" role="presentation"><section className="qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-dialog-title"><div className="qr-dialog-heading"><div><p className="form-kicker">Student QR code</p><h2 id="qr-dialog-title">{student.fullNames} {student.surname}</h2></div><button className="secondary-button" type="button" onClick={onClose}>Close</button></div>{imageUrl ? <img src={imageUrl} alt={`QR code for ${student.fullNames} ${student.surname}`} /> : <p className="empty-state">Loading QR code…</p>}<p className="form-note">This QR remains valid until the student details are changed.</p><button className="primary-button" disabled={loading || !imageUrl} type="button" onClick={onDownload}>{loading ? 'Preparing…' : 'Download PNG'}</button></section></div>
+function QrCodeDialog({ student, imageUrl, loading, sending, onClose, onDownload, onSend }: { student: StudentDirectoryItem; imageUrl: string; loading: boolean; sending: boolean; onClose: () => void; onDownload: () => void; onSend: () => void }) {
+  return <div className="qr-dialog-backdrop" role="presentation"><section className="qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-dialog-title"><div className="qr-dialog-heading"><div><p className="form-kicker">Student QR code</p><h2 id="qr-dialog-title">{student.fullNames} {student.surname}</h2></div><button className="secondary-button" type="button" onClick={onClose}>Close</button></div>{imageUrl ? <img src={imageUrl} alt={`QR code for ${student.fullNames} ${student.surname}`} /> : <p className="empty-state">Loading QR code…</p>}<p className="form-note">This QR remains valid until encoded student details are changed.</p>{student.personalEmail ? <p className="qr-recipient">Email recipient: <strong>{student.personalEmail}</strong></p> : <p className="account-warning">Add a personal email before sending this QR code.</p>}<div className="button-row compact-row"><button className="primary-button" disabled={loading || !imageUrl} type="button" onClick={onDownload}>{loading ? 'Preparing…' : 'Download PNG'}</button><button className="secondary-button" disabled={sending || !imageUrl || !student.personalEmail} type="button" onClick={onSend}>{sending ? 'Queueing…' : 'Send to student'}</button></div></section></div>
 }

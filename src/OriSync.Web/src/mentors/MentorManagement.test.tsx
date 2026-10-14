@@ -66,7 +66,7 @@ describe('Mentor management', () => {
     expect(await screen.findByDisplayValue('mentor@orisync.test')).toBeDisabled()
     await user.type(screen.getByLabelText('First name'), 'Jane')
     await user.type(screen.getByLabelText('Surname'), 'Mentor')
-    await user.type(screen.getByLabelText('Mentor number'), '223456789')
+    await user.type(screen.getByLabelText('Student number'), '223456789')
     await user.type(screen.getByLabelText('Password'), 'Secure!Password')
     await user.type(screen.getByLabelText('Confirm password'), 'Secure!Password')
     await user.click(screen.getByRole('button', { name: 'Activate account' }))

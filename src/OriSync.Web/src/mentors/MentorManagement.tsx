@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { getError, sendJson } from '../auth/api'
 import type { Orientation, OrientationGroup } from '../orientation/types'
 import type { MentorDirectoryItem, MentorDirectoryResponse } from './types'
+import { useConfirmation } from '../components/useConfirmation'
 
 const statuses = ['All', 'Active', 'Disabled', 'Pending delivery', 'Invited', 'Expired', 'Delivery failed', 'Cancelled']
 
@@ -93,7 +94,7 @@ export function MentorManagement() {
         </div>
 
         {loading ? <p aria-live="polite">Loading mentors…</p> : directory?.items.length ? (
-          <div className="table-scroll"><table className="directory-table"><thead><tr><th>Mentor</th><th>Mentor number</th><th>Group</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((item) => <MentorRow key={`${item.recordType}-${item.id}`} item={item} groups={groups} mutate={mutate} />)}</tbody></table></div>
+          <div className="table-scroll"><table className="directory-table"><thead><tr><th>Mentor</th><th>Student number</th><th>Group</th><th>Status</th><th>Actions</th></tr></thead><tbody>{directory.items.map((item) => <MentorRow key={`${item.recordType}-${item.id}`} item={item} groups={groups} mutate={mutate} />)}</tbody></table></div>
         ) : <p className="empty-state">No mentor records match these filters.</p>}
 
         <div className="pagination"><button className="secondary-button" type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {directory?.page ?? page} of {Math.max(directory?.totalPages ?? 0, 1)}</span><button className="secondary-button" type="button" disabled={!directory || page >= directory.totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></div>
@@ -129,24 +130,42 @@ type Mutation = (path: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown
 function MentorRow({ item, groups, mutate }: { item: MentorDirectoryItem; groups: OrientationGroup[]; mutate: Mutation }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState({ firstName: item.firstName ?? '', surname: item.surname ?? '', mentorNumber: item.mentorNumber ?? '', email: item.email, groupId: item.groupId })
+  const { confirm, confirmationDialog } = useConfirmation()
   const groupOptions = groups.some((group) => group.id === item.groupId) ? groups : [{ id: item.groupId, name: item.groupName, badgeColor: item.groupBadgeColor, isActive: false, canDelete: false }, ...groups]
 
   async function save(event: FormEvent) {
     event.preventDefault()
+    if (!await confirm({
+      title: 'Save mentor changes?',
+      message: `Update ${item.firstName} ${item.surname}'s account details and assigned group?`,
+      confirmLabel: 'Save changes',
+    })) return
     if (await mutate(`/api/admin/mentors/${item.id}`, 'PUT', draft, `${draft.firstName} ${draft.surname} was updated.`)) setEditing(false)
   }
   async function invitationGroupChanged(nextGroupId: number) {
+    const nextGroup = groups.find((group) => group.id === nextGroupId)?.name ?? 'the selected group'
+    if (!await confirm({
+      title: 'Reassign invitation?',
+      message: `Move the invitation for ${item.email} to ${nextGroup} Group? The previous activation link will be replaced.`,
+      confirmLabel: 'Reassign invitation',
+    })) return
     await mutate(`/api/admin/mentor-invitations/${item.id}/group`, 'PUT', { groupId: nextGroupId }, `Invitation reassigned to ${groups.find((group) => group.id === nextGroupId)?.name ?? 'the selected group'}.`)
   }
   async function confirmed(path: string, method: 'POST' | 'DELETE', question: string, success: string) {
-    if (window.confirm(question)) await mutate(path, method, undefined, success)
+    if (await confirm({
+      title: method === 'DELETE' ? 'Permanently delete mentor?' : 'Confirm account action',
+      message: question,
+      confirmLabel: method === 'DELETE' ? 'Delete permanently' : 'Confirm',
+      tone: method === 'DELETE' ? 'danger' : 'default',
+    })) await mutate(path, method, undefined, success)
   }
 
   if (editing && item.recordType === 'Mentor') {
-    return <tr><td colSpan={5}><form className="mentor-edit-grid" onSubmit={(event) => void save(event)}><label className="field">First name<input required maxLength={100} value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} /></label><label className="field">Surname<input required maxLength={100} value={draft.surname} onChange={(event) => setDraft({ ...draft, surname: event.target.value })} /></label><label className="field">Mentor number<input required pattern="2[0-9]{8}" maxLength={9} value={draft.mentorNumber} onChange={(event) => setDraft({ ...draft, mentorNumber: event.target.value.replace(/\D/g, '').slice(0, 9) })} /></label><label className="field">Email<input required type="email" maxLength={320} value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label><label className="field">Group<select required value={draft.groupId} onChange={(event) => setDraft({ ...draft, groupId: Number(event.target.value) })}>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><div className="button-row compact-row"><button className="primary-button" type="submit">Save</button><button className="secondary-button" type="button" onClick={() => setEditing(false)}>Cancel</button></div></form></td></tr>
+    return <><tr><td colSpan={5}><form className="mentor-edit-grid" onSubmit={(event) => void save(event)}><label className="field">First name<input required maxLength={100} value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} /></label><label className="field">Surname<input required maxLength={100} value={draft.surname} onChange={(event) => setDraft({ ...draft, surname: event.target.value })} /></label><label className="field">Student number<input required pattern="2[0-9]{8}" maxLength={9} value={draft.mentorNumber} onChange={(event) => setDraft({ ...draft, mentorNumber: event.target.value.replace(/\D/g, '').slice(0, 9) })} /></label><label className="field">Email<input required type="email" maxLength={320} value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label><label className="field">Group<select required value={draft.groupId} onChange={(event) => setDraft({ ...draft, groupId: Number(event.target.value) })}>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><div className="button-row compact-row"><button className="primary-button" type="submit">Save</button><button className="secondary-button" type="button" onClick={() => setEditing(false)}>Cancel</button></div></form></td></tr>{confirmationDialog}</>
   }
 
   return (
+    <>
     <tr>
       <td><strong>{item.recordType === 'Mentor' ? `${item.firstName} ${item.surname}` : item.email}</strong><small>{item.recordType === 'Mentor' ? item.email : 'Invitation'}</small></td>
       <td>{item.mentorNumber ?? '—'}</td>
@@ -154,5 +173,7 @@ function MentorRow({ item, groups, mutate }: { item: MentorDirectoryItem; groups
       <td><span className={`status-badge status-${item.status.toLowerCase().replaceAll(' ', '-')}`}>{item.status}</span>{item.deletionEligibleAt && <small>Delete after {new Date(item.deletionEligibleAt).toLocaleDateString()}</small>}</td>
       <td><div className="row-actions">{item.recordType === 'Invitation' ? <>{item.status !== 'Cancelled' && <><button className="text-button" type="button" onClick={() => void mutate(`/api/admin/mentor-invitations/${item.id}/resend`, 'POST', undefined, 'A replacement invitation was queued.')}>Resend</button><button className="danger-text-button" type="button" onClick={() => void confirmed(`/api/admin/mentor-invitations/${item.id}/cancel`, 'POST', `Cancel the invitation for ${item.email}?`, 'Invitation cancelled.')}>Cancel</button></>}</> : <><button className="text-button" type="button" onClick={() => setEditing(true)}>Edit</button>{item.status === 'Active' ? <button className="danger-text-button" type="button" onClick={() => void confirmed(`/api/admin/mentors/${item.id}/disable`, 'POST', `Disable ${item.firstName} ${item.surname} and end their active session?`, 'Mentor disabled.')}>Disable</button> : <><button className="text-button" type="button" onClick={() => void confirmed(`/api/admin/mentors/${item.id}/reactivate`, 'POST', `Reactivate ${item.firstName} ${item.surname}?`, 'Mentor reactivated.')}>Reactivate</button>{item.canDelete && <button className="danger-text-button" type="button" onClick={() => void confirmed(`/api/admin/mentors/${item.id}`, 'DELETE', `Permanently delete ${item.firstName} ${item.surname}? This cannot be undone.`, 'Mentor permanently deleted.')}>Delete</button>}</>}</>}</div></td>
     </tr>
+    {confirmationDialog}
+    </>
   )
 }
