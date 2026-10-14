@@ -19,6 +19,7 @@ import { OrientationSettings } from './orientation/OrientationSettings'
 import { RegisterReports } from './registers/RegisterReports'
 import { AdminStudentDirectory } from './students/AdminStudentDirectory'
 import { StudentManagement } from './students/StudentManagement'
+import { PageSkeleton } from '@/components/ui/page-skeleton'
 
 let attendanceScannerModule: ReturnType<typeof importAttendanceScanner> | null = null
 
@@ -147,7 +148,7 @@ function LoadingScreen() {
   return (
     <div className="app-shell">
       <Header />
-      <main className="loading-panel" aria-live="polite">Checking your session…</main>
+      <main className="loading-panel"><PageSkeleton label="Checking your session" variant="auth" /></main>
     </div>
   )
 }
@@ -216,7 +217,7 @@ function MentorWorkspace({ session, onChangePassword, onLogout }: { session: Ses
   }
 
   if (section === 'scanner') {
-    return <Suspense fallback={<main className="loading-panel">Loading scanner…</main>}><AttendanceScanner initialCameraStream={initialCameraStream!} onClose={() => { setInitialCameraStream(null); setSection('students') }} /></Suspense>
+    return <Suspense fallback={<main className="loading-panel"><PageSkeleton label="Loading scanner" variant="scanner" /></main>}><AttendanceScanner initialCameraStream={initialCameraStream!} onClose={() => { setInitialCameraStream(null); setSection('students') }} /></Suspense>
   }
 
   type MentorSection = Exclude<typeof section, 'scanner'>

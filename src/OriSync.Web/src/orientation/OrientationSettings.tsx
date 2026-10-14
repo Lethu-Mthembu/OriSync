@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { getError, sendJson } from '../auth/api'
 import type { Orientation, OrientationDraft, OrientationGroup } from './types'
 import { useConfirmation } from '../components/useConfirmation'
+import { PageSkeleton } from '@/components/ui/page-skeleton'
 
 const knownColours: Record<string, string> = {
   BLACK: '#212121',
@@ -107,7 +108,7 @@ export function OrientationSettings() {
     return updated
   }
 
-  if (loading) return <section className="settings-panel" aria-live="polite">Loading orientation settings…</section>
+  if (loading) return <section className="settings-workspace"><PageSkeleton label="Loading orientation settings" variant="settings" /></section>
 
   return (
     <section className="settings-workspace" aria-labelledby="orientation-settings-heading">

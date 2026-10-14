@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { getError, postJson } from '../auth/api'
 import type { MentorActivationDetails } from './types'
 import { PasswordField } from '../components/PasswordField'
+import { PageSkeleton } from '@/components/ui/page-skeleton'
 
 const passwordPattern = '(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}'
 
@@ -51,7 +52,7 @@ export function MentorActivation({ invitationId, token }: { invitationId: number
     setSubmitting(false)
   }
 
-  if (loading) return <main className="activation-layout" aria-live="polite">Validating activation link…</main>
+  if (loading) return <main className="activation-layout"><PageSkeleton label="Validating activation link" variant="auth" /></main>
   if (complete) {
     return (
       <main className="activation-layout">
